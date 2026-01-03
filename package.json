@@ -1,0 +1,27 @@
+{
+  "name": "yolo-trainer",
+  "version": "1.0.0",
+  "description": "Interactive YOLO Model Trainer with Reddit Integration",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": [
+    "yolo",
+    "training",
+    "annotation",
+    "reddit"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^39.2.7"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "fs-extra": "^11.3.3"
+  }
+}

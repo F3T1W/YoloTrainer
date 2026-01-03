@@ -1,0 +1,6 @@
+ultralytics>=8.0.0
+requests>=2.31.0
+pyyaml>=6.0
+opencv-python>=4.8.0
+pillow>=10.0.0
+

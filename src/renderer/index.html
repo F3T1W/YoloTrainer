@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO Model Trainer</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --sidebar-width: 280px;
+            --primary-color: #dc3545; /* Bootstrap Danger Red */
+            --dark-bg: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #0f0f0f;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* Prevent body scroll, handle in main-content */
+            height: 100vh;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+            color: var(--primary-color);
+        }
+
+        .nav-link {
+            color: #aaa;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link.active {
+            color: var(--primary-color);
+            background-color: rgba(220, 53, 69, 0.1);
+            border-left-color: var(--primary-color);
+        }
+
+        .nav-link i {
+            font-size: 1.2rem;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: auto;
+        }
+
+        .status-pending { background-color: #6c757d; }
+        .status-completed { background-color: #198754; box-shadow: 0 0 5px #198754; }
+
+        /* Main Content Styles */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            height: 100vh;
+            overflow-y: auto;
+            background-color: var(--dark-bg);
+            padding: 2rem;
+            display: flex; /* Enable flex for centering page containers */
+            flex-direction: column;
+        }
+
+        /* Page Container - Full height and centered content */
+        .page-container {
+            display: none !important; /* Hidden by default */
+            flex: 1; /* Take all available space */
+            flex-direction: column;
+            width: 100%;
+            height: 100%; /* Ensure it fills the main-content */
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        .page-container.active {
+            display: flex !important;
+        }
+
+        /* Helper for vertical centering content inside page */
+        .content-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center; /* Vertical center */
+            width: 100%;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Component Styles */
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid #333;
+            color: var(--text-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            border-bottom: 1px solid #333;
+            background-color: rgba(255, 255, 255, 0.02);
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .form-control, .form-select {
+            background-color: #2b2b2b;
+            border: 1px solid #444;
+            color: #fff;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background-color: #333;
+            border-color: var(--primary-color);
+            color: #fff;
+            box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+        }
+
+        .form-floating label {
+            color: #fff;
+            opacity: 0.8;
+        }
+        
+        .form-floating > .form-control:focus ~ label,
+        .form-floating > .form-control:not(:placeholder-shown) ~ label,
+        .form-floating > .form-select ~ label {
+            color: #fff;
+            opacity: 1;
+        }
+
+        /* Fix for white background on floating labels in dark mode */
+        .form-floating > .form-control:focus ~ label::after,
+        .form-floating > .form-control:not(:placeholder-shown) ~ label::after {
+            background-color: transparent !important; 
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: #bb2d3b;
+            border-color: #b02a37;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(220, 53, 69, 0.3);
+        }
+
+        /* Canvas Area */
+        #annotation-container {
+            position: relative;
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            width: 100%;
+            flex-grow: 1; /* Fill remaining vertical space */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px; /* Minimum height for canvas */
+        }
+
+        #image-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--dark-bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        .badge-class {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            margin: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .badge-class:hover {
+            transform: scale(1.05);
+        }
+
+        /* Terminal-like log */
+        .terminal-log {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            padding: 1rem;
+            border-radius: 6px;
+            height: 100%;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <i class="bi bi-robot logo-icon"></i>
+            <div>
+                <h5 class="mb-0">YOLO</h5>
+                <small class="text-white">Trainer</small>
+            </div>
+        </div>
+        <nav class="nav flex-column mt-3">
+            <a class="nav-link active" onclick="showPage('home')">
+                <i class="bi bi-house-door"></i> Home
+            </a>
+            <a class="nav-link" onclick="showPage('download')">
+                <i class="bi bi-cloud-arrow-down"></i> Download Images
+                <div id="status-download" class="status-indicator status-pending"></div>
+            </a>
+            <a class="nav-link" onclick="showPage('classes')">
+                <i class="bi bi-tags"></i> Define Classes
+                <div id="status-classes" class="status-indicator status-pending"></div>
+            </a>
+            <a class="nav-link" onclick="showPage('annotate')">
+                <i class="bi bi-bounding-box"></i> Annotate Dataset
+                <div id="status-annotate" class="status-indicator status-pending"></div>
+            </a>
+            <a class="nav-link" onclick="showPage('train')">
+                <i class="bi bi-cpu"></i> Train Model
+                <div id="status-train" class="status-indicator status-pending"></div>
+            </a>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- Home Page -->
+        <div id="page-home" class="page-container active">
+            <div class="content-wrapper">
+                <div class="row h-100 g-4">
+                    <!-- Welcome Section -->
+                    <div class="col-lg-8 d-flex flex-column">
+                        <div class="card h-100 border-0 bg-transparent shadow-none">
+                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                <h1 class="display-3 fw-bold mb-4">Welcome to <span class="text-danger">YOLO</span> Trainer</h1>
+                                <p class="lead text-white mb-5">
+                                    Create custom object detection models with an intuitive, end-to-end workflow. 
+                                    Download data, annotate images, and train your model all in one place.
+                                </p>
+                                
+                                <div class="row g-4 mt-auto">
+                                    <div class="col-md-4">
+                                        <div class="card bg-dark h-100">
+                                            <div class="card-body stat-card">
+                                                <div id="stat-datasets" class="stat-number">0</div>
+                                                <div class="text-white fs-5">Datasets</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card bg-dark h-100">
+                                            <div class="card-body stat-card">
+                                                <div id="stat-images" class="stat-number">0</div>
+                                                <div class="text-white fs-5">Images</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card bg-dark h-100">
+                                            <div class="card-body stat-card">
+                                                <div id="stat-models" class="stat-number">0</div>
+                                                <div class="text-white fs-5">Models</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Start Navigation -->
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-transparent text-center">
+                                <h4 class="mb-0"><i class="bi bi-rocket-takeoff me-2"></i>Quick Start</h4>
+                            </div>
+                            <div class="card-body d-flex flex-column justify-content-around">
+                                <div class="text-center p-3">
+                                    <i class="bi bi-reddit fs-1 text-danger mb-3"></i>
+                                    <h5>1. Download</h5>
+                                    <p class="text-white small">Get images from subreddits</p>
+                                    <button class="btn btn-outline-danger w-100" onclick="showPage('download')">Go to Download</button>
+                                </div>
+                                <hr class="border-secondary">
+                                <div class="text-center p-3">
+                                    <i class="bi bi-pencil-square fs-1 text-warning mb-3"></i>
+                                    <h5>2. Annotate</h5>
+                                    <p class="text-white small">Label your dataset</p>
+                                    <button class="btn btn-outline-warning w-100" onclick="showPage('annotate')">Start Annotating</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Page -->
+        <div id="page-download" class="page-container">
+            <div class="content-wrapper">
+                <div class="row justify-content-center w-100">
+                    <div class="col-xl-8 col-lg-10">
+                        <div class="card shadow-lg">
+                            <div class="card-header text-center py-3">
+                                <h3 class="mb-0 text-white"><i class="bi bi-cloud-download me-2"></i>Download Images from Reddit</h3>
+                            </div>
+                            <div class="card-body p-5">
+                                <form id="download-form" class="needs-validation" novalidate>
+                                    <div class="row g-4">
+                                        <div class="col-md-6">
+                                            <div class="form-floating">
+                                                <input type="text" class="form-control text-white" id="subreddit-input" placeholder="subreddit" required>
+                                                <label for="subreddit-input">Subreddit Name (e.g. HairyArmpits)</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-floating">
+                                                <input type="text" class="form-control text-white" id="class-name-input" placeholder="class" required>
+                                                <label for="class-name-input">Class Name</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-floating">
+                                                <input type="number" class="form-control text-white" id="image-limit" value="100" min="1" max="1000" placeholder="Limit">
+                                                <label for="image-limit">Image Limit</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="input-group h-100">
+                                                <div class="form-floating flex-grow-1">
+                                                    <input type="text" class="form-control text-white" id="download-path" placeholder="Path">
+                                                    <label for="download-path">Download Path</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Progress Bar Area -->
+                                        <div class="col-12 mt-4">
+                                            <div id="download-progress-container" style="display: none;">
+                                                <label class="form-label d-flex justify-content-between">
+                                                    <span>Downloading...</span>
+                                                    <span id="download-status-text">0%</span>
+                                                </label>
+                                                <div class="progress bg-dark" style="height: 10px;">
+                                                    <div id="download-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 0%"></div>
+                                                </div>
+                                                <div id="download-log" class="small text-muted mt-2 font-monospace" style="max-height: 100px; overflow-y: auto; color: #fff !important;"></div>
+                    </div>
+                </div>
+
+                                        <div class="col-12 d-flex gap-3 mt-4">
+                                            <button type="button" id="btn-start-download" class="btn btn-danger btn-lg flex-grow-1" onclick="handleDownload(event)">
+                                                <i class="bi bi-download me-2"></i>Start Download
+                                            </button>
+                                            <button type="button" class="btn btn-outline-light btn-lg" onclick="showPage('classes')">
+                                                Continue <i class="bi bi-arrow-right ms-2"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                        </div>
+                    </div>
+                </div>
+
+        <!-- Classes Page -->
+        <div id="page-classes" class="page-container">
+            <div class="content-wrapper">
+                <div class="row g-4 h-100">
+                    <!-- Left: Add New Class -->
+                    <div class="col-lg-5 d-flex flex-column">
+                        <div class="card flex-grow-1">
+                            <div class="card-header">
+                                <h4 class="mb-0 text-white"><i class="bi bi-plus-circle me-2"></i>Add New Class</h4>
+                            </div>
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                <div class="mb-4">
+                                    <label class="form-label text-white">Class Name</label>
+                                    <div class="input-group input-group-lg">
+                                        <input type="text" id="new-class-input" class="form-control" placeholder="e.g. Cat">
+                                        <button class="btn btn-danger" type="button" id="btn-add-class">
+                                            Add Class
+                                        </button>
+                                    </div>
+                                    <div class="form-text mt-2 text-white opacity-75">Classes define what objects your model will learn to detect.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Current Classes List -->
+                    <div class="col-lg-7 d-flex flex-column">
+                        <div class="card flex-grow-1">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h4 class="mb-0 text-white"><i class="bi bi-list-check me-2"></i>Managed Classes</h4>
+                                <span class="badge bg-secondary" id="class-count">0</span>
+                            </div>
+                    <div class="card-body">
+                                <div id="classes-list" class="d-flex flex-wrap gap-2 align-content-start h-100">
+                                    <!-- Class items will be injected here -->
+                                    <div class="text-white w-100 text-center mt-5 opacity-75">No classes defined yet. Add one to get started.</div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent border-top-0 pb-3 text-end">
+                                <button class="btn btn-outline-light btn-lg" onclick="showPage('annotate')">
+                                    Continue to Annotation <i class="bi bi-arrow-right ms-2"></i>
+                                </button>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Annotate Page -->
+        <div id="page-annotate" class="page-container">
+            <!-- Top Controls -->
+            <div class="card mb-3 w-100 flex-shrink-0">
+                <div class="card-body py-2">
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-3">
+                            <button class="btn btn-secondary w-100" id="btn-load-dataset">
+                                <i class="bi bi-folder2-open me-2"></i>Load Dataset
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" id="annotation-class-select">
+                                <option selected disabled>Select Class...</option>
+                            </select>
+                    </div>
+                        <div class="col-md-5 text-end">
+                             <span class="text-white me-3" id="image-counter">0 / 0</span>
+                             <span class="badge bg-danger" id="current-file-name">No file</span>
+                    </div>
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Main Canvas Area (Fills space) -->
+            <div id="annotation-container">
+                <canvas id="canvas-layer" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
+                <div class="text-white opacity-75 text-center" id="placeholder-text">
+                    <i class="bi bi-image fs-1 d-block mb-3"></i>
+                    Load a dataset to start annotating
+                </div>
+            </div>
+
+            <!-- Bottom Navigation -->
+            <div class="card mt-3 w-100 flex-shrink-0">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                             <button class="btn btn-dark" id="btn-prev-image" disabled>
+                                <i class="bi bi-chevron-left me-1"></i> Previous
+                            </button>
+                            <button class="btn btn-dark ms-2" id="btn-clear-annotations" disabled>
+                                <i class="bi bi-trash me-1"></i> Clear
+                            </button>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary px-4" id="btn-save-next" disabled>
+                                Save & Next <i class="bi bi-chevron-right ms-1"></i>
+                            </button>
+                            <button class="btn btn-outline-success ms-3" onclick="showPage('train')">
+                                Finish & Train <i class="bi bi-check-lg ms-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+                            </div>
+
+        <!-- Train Page -->
+        <div id="page-train" class="page-container">
+             <div class="content-wrapper h-100">
+                <div class="row g-4 h-100">
+                    <!-- Configuration Section -->
+                    <div class="col-lg-12 flex-shrink-0">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4 class="mb-0 text-white"><i class="bi bi-sliders me-2"></i>Training Configuration</h4>
+                            </div>
+                            <div class="card-body">
+                                <form id="train-form" class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label text-white">Dataset Path</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="train-dataset-path" readonly>
+                                            <button class="btn btn-secondary" type="button" id="btn-select-train-dataset">
+                                                Select
+                                </button>
+                            </div>
+                        </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label text-white">Epochs</label>
+                                        <input type="number" class="form-control" id="epochs" value="50">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label text-white">Batch Size</label>
+                                        <input type="number" class="form-control" id="batch-size" value="16">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label text-white">Image Size</label>
+                                        <input type="number" class="form-control" id="img-size" value="640">
+                                    </div>
+                                    <div class="col-12 mt-3 text-center">
+                                        <button type="button" id="btn-start-training" class="btn btn-danger btn-lg px-5">
+                                            <i class="bi bi-play-circle-fill me-2"></i> Start Training
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terminal Output Section -->
+                    <div class="col-lg-12 flex-grow-1" style="min-height: 0;">
+                        <div class="card h-100 d-flex flex-column">
+                            <div class="card-header bg-black text-white border-bottom border-dark d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-terminal me-2"></i>Training Log</span>
+                                <span class="badge bg-secondary" id="training-status-badge">Idle</span>
+                            </div>
+                            <div class="card-body p-0 flex-grow-1" style="background-color: #000; overflow: hidden;">
+                                <div id="training-log" class="terminal-log">
+                                    <div class="text-success">> Ready to initialize training sequence...</div>
+                                </div>
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="annotation.js"></script>
+    <script>
+        // Simple page switcher logic
+        function showPage(pageId) {
+            // Hide all pages
+            document.querySelectorAll('.page-container').forEach(el => {
+                el.classList.remove('active');
+            });
+            // Remove active class from nav links
+            document.querySelectorAll('.nav-link').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Show selected page
+            document.getElementById('page-' + pageId).classList.add('active');
+            
+            // Activate nav link
+            const navLink = document.querySelector(`.nav-link[onclick="showPage('${pageId}')"]`);
+            if(navLink) navLink.classList.add('active');
+        }
+
+        // Initialize Home
+        document.addEventListener('DOMContentLoaded', () => {
+             // Ensure correct page is shown on load
+             showPage('home');
+        });
+    </script>
+</body>
+</html>

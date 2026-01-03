@@ -1,0 +1,17 @@
+node_modules/
+datasets/
+models/
+*.log
+.DS_Store
+*.pt
+*.pth
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+
+
+
+
+
