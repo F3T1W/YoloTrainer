@@ -2,6 +2,11 @@
 window.showPage = showPage;
 window.handleDownload = handleDownload;
 window.handleSelectDownloadPath = handleSelectDownloadPath;
+window.addClass = addClass;
+window.handleLoadDataset = handleLoadDataset;
+window.saveAnnotation = saveAnnotation;
+window.clearAnnotations = clearAnnotations;
+window.undoAnnotation = undoAnnotation;
 
 // Initialize
 if (document.readyState === 'loading') {
@@ -13,8 +18,34 @@ if (document.readyState === 'loading') {
 function init() {
     console.log('Annotation script initialized');
     
+    // Global keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Only if annotation page is active
+        const annotatePage = document.getElementById('page-annotate');
+        if (!annotatePage || !annotatePage.classList.contains('active')) return;
+        
+        // Ignore if typing in an input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        if (e.key === 'Enter' || e.key === 'ArrowRight') {
+            e.preventDefault(); // Prevent scrolling
+            saveAnnotation();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            navigateImage(-1);
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            undoAnnotation();
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            // Delete selected annotation (if we implement selection later)
+            undoAnnotation(); 
+        }
+    });
+    
+    // ... rest of init
+    
     // Load default classes
-    classes = ['AltGirl', 'Bimbo', 'Nerdy', 'ARMPITS'];
+    classes = ['AltGirl', 'Bimbo', 'Nerdy', 'Armpits'];
     selectedClass = classes[0];
     
     // Navigation - menu items
@@ -26,6 +57,32 @@ function init() {
         });
     });
     
+    // Listen for training progress
+    ipcRenderer.on('training-progress', (event, data) => {
+        const trainingOutput = document.getElementById('training-log');
+        const trainingStatus = document.getElementById('training-status-badge');
+        
+        if (trainingOutput) {
+            // Append line
+            const div = document.createElement('div');
+            div.textContent = data;
+            // Colorize specific logs
+            if (data.includes('Epoch')) div.style.color = '#0dcaf0'; // Cyan
+            if (data.includes('Class')) div.style.color = '#ffc107'; // Yellow
+            if (data.includes('Training complete')) div.style.color = '#198754'; // Green
+            
+            trainingOutput.appendChild(div);
+            trainingOutput.scrollTop = trainingOutput.scrollHeight;
+        }
+        
+        if (trainingStatus) {
+            if (data.includes('Epoch')) {
+                trainingStatus.textContent = 'Training...';
+                trainingStatus.className = 'badge bg-primary pulse-animation';
+            }
+        }
+    });
+
     // Mobile sidebar toggle
     const sidebarToggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebarMenu');
@@ -80,8 +137,8 @@ function init() {
     }
     
     // Train page
-    const trainBtn = document.getElementById('trainBtn');
-    const selectTrainDatasetBtn = document.getElementById('selectTrainDatasetBtn');
+    const trainBtn = document.getElementById('btn-start-training');
+    const selectTrainDatasetBtn = document.getElementById('btn-select-train-dataset');
     
     if (trainBtn) {
         trainBtn.addEventListener('click', startTraining);
@@ -91,8 +148,9 @@ function init() {
         selectTrainDatasetBtn.addEventListener('click', async () => {
             const result = await ipcRenderer.invoke('select-dataset-folder');
             if (result) {
-                document.getElementById('trainDatasetPath').value = result;
-                currentDatasetPath = result;
+                document.getElementById('train-dataset-path').value = result;
+                // If we select a new path here, update global currentDatasetPath too?
+                // Probably better not to overwrite if user wants to train on different dataset than annotation
             }
         });
     }
@@ -328,47 +386,62 @@ function renderClasses() {
         } else {
             classes.forEach((cls, idx) => {
                 const badge = document.createElement('span');
-                badge.className = 'class-badge';
-                badge.textContent = cls;
-                badge.dataset.class = cls;
-                badge.addEventListener('click', () => {
-                    document.querySelectorAll('.class-badge').forEach(b => b.classList.remove('active'));
-                    badge.classList.add('active');
+                // Use Bootstrap badge classes for better look
+                badge.className = 'badge rounded-pill text-bg-dark border border-secondary m-1 p-2 fs-6 cursor-pointer user-select-none d-inline-flex align-items-center gap-2';
+                
+                if (cls === selectedClass) {
+                    badge.classList.remove('text-bg-dark', 'border-secondary');
+                    badge.classList.add('text-bg-danger', 'border-danger');
+                }
+                
+                badge.innerHTML = `
+                    <span>${cls}</span>
+                    <i class="bi bi-x-circle-fill text-white-50 hover-text-white" onclick="event.stopPropagation(); removeClass('${cls}')" title="Remove class" style="cursor: pointer;"></i>
+                `;
+                
+                badge.onclick = () => {
                     selectedClass = cls;
-                });
-                if (idx === 0) badge.classList.add('active');
+                    renderClasses(); // Re-render to update active state
+                };
+                
                 classesList.appendChild(badge);
             });
         }
     }
     
     // Annotate page class selector
-    const classSelector = document.getElementById('classSelector');
+    const classSelector = document.getElementById('annotation-class-select');
     if (classSelector) {
-        classSelector.innerHTML = '';
-        classes.forEach((cls, idx) => {
-            const div = document.createElement('div');
-            div.className = 'form-check';
-            div.innerHTML = `
-                <input class="form-check-input" type="radio" name="classRadio" id="class${idx}" value="${cls}" ${idx === 0 ? 'checked' : ''}>
-                <label class="form-check-label" for="class${idx}">${cls}</label>
-            `;
-            classSelector.appendChild(div);
+        classSelector.innerHTML = '<option disabled>Select Class...</option>';
+        classes.forEach((cls) => {
+            const option = document.createElement('option');
+            option.value = cls;
+            option.textContent = cls;
+            if (cls === selectedClass) option.selected = true;
+            classSelector.appendChild(option);
         });
         
-        // Add event listeners
-        document.querySelectorAll('input[name="classRadio"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    selectedClass = e.target.value;
-                }
-            });
-        });
+        // Add event listener if not already added (or just update on change)
+        classSelector.onchange = (e) => {
+            selectedClass = e.target.value;
+        };
     }
 }
 
+// Make removeClass global so it can be called from onclick
+window.removeClass = function(cls) {
+    if (confirm(`Delete class "${cls}"?`)) {
+        classes = classes.filter(c => c !== cls);
+        if (selectedClass === cls) {
+            selectedClass = classes[0] || null;
+        }
+        renderClasses();
+        checkWorkflowStatus();
+    }
+};
+
 function addClass() {
-    const newClassInput = document.getElementById('newClassInput');
+    const newClassInput = document.getElementById('new-class-input');
     if (!newClassInput) return;
     
     const newClass = newClassInput.value.trim();
@@ -387,9 +460,12 @@ function addClass() {
                 <i class="bi bi-check-circle me-2"></i>Class "${newClass}" added successfully!
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
-            classesList.parentElement.insertBefore(alert, classesList.nextSibling);
-            setTimeout(() => alert.remove(), 3000);
+            // Insert alert after the card body, or append to a specific container
+            // For now, let's use showMessage toast which is more consistent
+            showMessage(`Class "${newClass}" added successfully!`, 'success');
         }
+    } else if (classes.includes(newClass)) {
+        showMessage(`Class "${newClass}" already exists`, 'warning');
     }
 }
 
@@ -531,72 +607,125 @@ async function loadDataset(datasetPath) {
         await loadImage(0);
         showMessage(`Loaded ${images.length} images`, 'success');
     } else {
-        showMessage('No images found in dataset folder. Make sure "images" folder exists.', 'warning');
+        showMessage('No images found in the selected folder.', 'warning');
     }
     
     updateProgress();
     checkWorkflowStatus();
 }
 
+window.navigateImage = navigateImage; // Make global
+
 async function loadImage(index) {
     if (index < 0 || index >= images.length) return;
     
     currentImageIndex = index;
     
-    const currentIndexEl = document.getElementById('currentIndex');
-    const totalImagesEl = document.getElementById('totalImages');
-    const currentImageName = document.getElementById('currentImageName');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
+    // Update header counter
+    const imageCounter = document.getElementById('image-counter');
+    const currentFileName = document.getElementById('current-file-name');
     
-    if (currentIndexEl) {
-        currentIndexEl.textContent = index + 1;
-    }
-    if (totalImagesEl) {
-        totalImagesEl.textContent = images.length;
-    }
-    if (prevBtn) {
-        prevBtn.disabled = index === 0;
-    }
-    if (nextBtn) {
-        nextBtn.disabled = index === images.length - 1;
+    if (imageCounter) {
+        imageCounter.textContent = `${index + 1} / ${images.length}`;
     }
     
-    const imagePath = path.join(currentDatasetPath, 'images', images[index]);
-    if (currentImageName) {
-        currentImageName.textContent = images[index];
+    updateNavigationButtons(); // Update buttons visibility
+    
+    // Determine path based on folder structure
+    const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(currentDatasetPath, 'images'));
+    
+    let imagePath;
+    if (hasImagesSubdir) {
+         imagePath = path.join(currentDatasetPath, 'images', images[index]);
+         const existsInSub = await ipcRenderer.invoke('file-exists', imagePath);
+         if (!existsInSub) {
+             imagePath = path.join(currentDatasetPath, images[index]);
+         }
+    } else {
+        imagePath = path.join(currentDatasetPath, images[index]);
+    }
+
+    if (currentFileName) {
+        currentFileName.textContent = images[index];
     }
     
     // Load image
     currentImage = new Image();
-    currentImage.src = imagePath;
     
+    // Convert path to file URL to ensure it loads correctly in Electron
+    // Use file:// protocol explicitly
+    const fileUrl = 'file://' + imagePath.replace(/\\/g, '/');
+    currentImage.src = fileUrl;
+    
+    console.log('Loading image from:', fileUrl); // Debug log
+    
+    // ... rest of function
     currentImage.onload = () => {
-        // Resize canvas to fit image (max 1200px width)
-        const maxWidth = 1200;
-        const maxHeight = 800;
-        
-        let width = currentImage.width;
-        let height = currentImage.height;
-        
-        if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
+        // Hide placeholder text
+        const placeholderText = document.getElementById('placeholder-text');
+        if (placeholderText) {
+            placeholderText.style.display = 'none';
         }
-        if (height > maxHeight) {
-            width = (width * maxHeight) / height;
-            height = maxHeight;
-        }
+
+        // Get container dimensions
+        const container = document.getElementById('annotation-container');
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+
+        // Calculate scale to fit image within container
+        let scale = Math.min(containerWidth / currentImage.width, containerHeight / currentImage.height);
         
-        canvas.width = width;
-        canvas.height = height;
-        imageScale = width / currentImage.width;
+        // Use 90% of available space to add some padding
+        scale = scale * 0.95;
+
+        canvas.width = currentImage.width * scale;
+        canvas.height = currentImage.height * scale;
+        
+        // Store scale for coordinate conversion
+        imageScale = scale;
         
         drawImage();
         loadAnnotations().then(() => {
             updateProgress();
         });
     };
+}
+
+function updateNavigationButtons() {
+    const isFirst = currentImageIndex === 0;
+    const isLast = currentImageIndex === images.length - 1;
+    
+    // Bottom buttons
+    const prevBtn = document.getElementById('btn-prev-image'); // This button is removed from HTML now
+    const nextBtn = document.getElementById('btn-save-next'); // This button is removed from HTML now
+    
+    // Floating buttons
+    const floatingPrev = document.getElementById('btn-floating-prev');
+    const floatingNext = document.getElementById('btn-floating-next');
+    
+    // Logic for Floating Previous
+    if (floatingPrev) {
+        floatingPrev.style.display = isFirst ? 'none' : 'block';
+    }
+    
+    // Logic for Floating Next
+    if (floatingNext) {
+        floatingNext.style.display = isLast ? 'none' : 'block';
+    }
+    
+    // Highlight Finish button if last
+    const finishBtn = document.getElementById('btn-finish-train');
+    if (finishBtn) {
+        if (isLast) {
+            finishBtn.classList.remove('btn-outline-success');
+            finishBtn.classList.add('btn-success');
+            finishBtn.classList.add('pulse-animation'); // Add visual cue
+        } else {
+            finishBtn.classList.remove('btn-success');
+            finishBtn.classList.remove('pulse-animation');
+            finishBtn.classList.add('btn-outline-success');
+        }
+    }
 }
 
 function updateProgress() {
@@ -611,6 +740,7 @@ function drawImage() {
     if (!ctx || !currentImage) return;
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Draw image scaled to canvas size
     ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
     drawAnnotations();
 }
@@ -760,9 +890,19 @@ function stopDrawing(e) {
 }
 
 function clearAnnotations() {
-    currentAnnotations = [];
-    drawImage();
-    updateAnnotationCount();
+    if (confirm('Clear all annotations for this image?')) {
+        currentAnnotations = [];
+        drawImage();
+        updateAnnotationCount();
+    }
+}
+
+function undoAnnotation() {
+    if (currentAnnotations.length > 0) {
+        currentAnnotations.pop();
+        drawImage();
+        updateAnnotationCount();
+    }
 }
 
 async function saveAnnotation() {
@@ -771,16 +911,31 @@ async function saveAnnotation() {
         return;
     }
     
-    if (currentAnnotations.length === 0) {
-        showMessage('No annotations to save', 'info');
-        return;
-    }
+    // Allow saving even with no annotations (to skip images or mark as empty background)
+    // if (currentAnnotations.length === 0) {
+    //     showMessage('No annotations to save', 'info');
+    //     return;
+    // }
     
     const imagePath = path.join(currentDatasetPath, 'images', images[currentImageIndex]);
+    // Determine path based on where we loaded from (simplified logic for now)
+    // In a real app we should store the full path of each image in the images array or a separate map
+    let targetPath;
+    if (currentDatasetPath) {
+         // Re-construct the path used in loadImage - ideally we should store it
+         const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(currentDatasetPath, 'images'));
+         if (hasImagesSubdir) {
+             targetPath = path.join(currentDatasetPath, 'images', images[currentImageIndex]);
+             const exists = await ipcRenderer.invoke('file-exists', targetPath);
+             if (!exists) targetPath = path.join(currentDatasetPath, images[currentImageIndex]);
+         } else {
+             targetPath = path.join(currentDatasetPath, images[currentImageIndex]);
+         }
+    }
     
     try {
         await ipcRenderer.invoke('save-annotation', {
-            imagePath,
+            imagePath: targetPath,
             annotations: currentAnnotations,
             classNames: classes
         });
@@ -789,6 +944,9 @@ async function saveAnnotation() {
         
         // Update workflow status
         checkWorkflowStatus();
+        
+        // Clear annotations for the next image
+        currentAnnotations = []; // IMPORTANT: Clear current annotations
         
         // Move to next
         navigateImage(1);
@@ -805,10 +963,15 @@ function navigateImage(direction) {
 }
 
 async function startTraining() {
-    const trainDatasetPath = document.getElementById('trainDatasetPath');
-    const trainBtn = document.getElementById('trainBtn');
+    const trainDatasetPath = document.getElementById('train-dataset-path');
+    const trainBtn = document.getElementById('btn-start-training');
     
     if (!trainBtn) return;
+    
+    // Auto-fill path if empty and we have a current one
+    if (trainDatasetPath && !trainDatasetPath.value && currentDatasetPath) {
+        trainDatasetPath.value = currentDatasetPath;
+    }
     
     const datasetPath = trainDatasetPath ? trainDatasetPath.value.trim() : currentDatasetPath;
     
@@ -817,11 +980,11 @@ async function startTraining() {
         return;
     }
     
-    const epochsInput = document.getElementById('epochsInput');
-    const batchInput = document.getElementById('batchInput');
-    const imgSizeInput = document.getElementById('imgSizeInput');
-    const trainingStatus = document.getElementById('trainingStatus');
-    const trainingOutput = document.getElementById('trainingOutput');
+    const epochsInput = document.getElementById('epochs');
+    const batchInput = document.getElementById('batch-size');
+    const imgSizeInput = document.getElementById('img-size');
+    const trainingStatus = document.getElementById('training-status-badge');
+    const trainingOutput = document.getElementById('training-log');
     
     const epochs = parseInt(epochsInput ? epochsInput.value : 50) || 50;
     const batchSize = parseInt(batchInput ? batchInput.value : 16) || 16;
@@ -831,10 +994,11 @@ async function startTraining() {
     trainBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Training...';
     
     if (trainingStatus) {
-        trainingStatus.innerText = 'Starting training...\n';
+        trainingStatus.innerText = 'Initializing...';
+        trainingStatus.className = 'badge bg-warning text-dark';
     }
     if (trainingOutput) {
-        trainingOutput.style.display = 'block';
+        trainingOutput.innerHTML = '<div class="text-success">> Initializing training sequence...</div>';
     }
     
     try {
@@ -842,14 +1006,32 @@ async function startTraining() {
             datasetPath: datasetPath,
             epochs,
             batchSize,
-            imgSize
+            imgSize,
+            classNames: classes // Pass global classes array
         });
         
         showMessage('Training complete!', 'success');
-        trainBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Start Training';
+        trainBtn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i> Start Training';
+        
+        if (trainingStatus) {
+            trainingStatus.innerText = 'Completed';
+            trainingStatus.className = 'badge bg-success';
+        }
     } catch (e) {
         showMessage('Training failed: ' + e.message, 'danger');
-        trainBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Start Training';
+        trainBtn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i> Start Training';
+        
+        if (trainingStatus) {
+            trainingStatus.innerText = 'Failed';
+            trainingStatus.className = 'badge bg-danger';
+        }
+        
+        if (trainingOutput) {
+             const div = document.createElement('div');
+             div.textContent = `Error: ${e.message}`;
+             div.className = 'text-danger';
+             trainingOutput.appendChild(div);
+        }
     } finally {
         trainBtn.disabled = false;
     }

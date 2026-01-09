@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs-extra');
@@ -6,9 +6,11 @@ const fs = require('fs-extra');
 let mainWindow;
 
 function createWindow() {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: width,
+    height: height,
     backgroundColor: '#0a0a0a',
     webPreferences: {
       nodeIntegration: true,
@@ -41,9 +43,17 @@ ipcMain.handle('select-dataset-folder', async () => {
 
 ipcMain.handle('load-dataset', async (event, datasetPath) => {
   try {
+    // Check if "images" folder exists
     const imagesPath = path.join(datasetPath, 'images');
-    await fs.ensureDir(imagesPath);
-    const files = await fs.readdir(imagesPath);
+    const hasImagesFolder = await fs.pathExists(imagesPath);
+    
+    let targetPath = datasetPath;
+    if (hasImagesFolder) {
+      targetPath = imagesPath;
+    }
+    
+    // Read files from target path (either root or images folder)
+    const files = await fs.readdir(targetPath);
     return files.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
   } catch (e) {
     return [];
@@ -119,18 +129,22 @@ ipcMain.handle('save-annotation', async (event, { imagePath, annotations, classN
   }
 });
 
-ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, imgSize }) => {
+ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, imgSize, classNames }) => {
   return new Promise((resolve, reject) => {
     const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
     const scriptPath = path.join(__dirname, '../../python/yolo_trainer.py');
     
+    // Ensure classNames is an array and join it
+    const classNamesStr = Array.isArray(classNames) ? classNames.join(',') : '';
+
     const pythonProcess = spawn(pythonPath, [
       scriptPath,
       '--data', datasetPath,
       '--epochs', epochs.toString(),
       '--batch', batchSize.toString(),
       '--img', imgSize.toString(),
-      '--output', path.join(__dirname, '../../models')
+      '--output', path.join(__dirname, '../../models'),
+      '--class-names', classNamesStr
     ]);
 
     let output = '';
@@ -140,7 +154,9 @@ ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, im
     });
     
     pythonProcess.stderr.on('data', (d) => {
-      console.error(`Training Error: ${d}`);
+      // YOLO outputs progress to stderr sometimes, so we want to see it too
+      if (mainWindow) mainWindow.webContents.send('training-progress', d.toString());
+      console.error(`Training Info: ${d}`);
     });
 
     pythonProcess.on('close', (code) => {

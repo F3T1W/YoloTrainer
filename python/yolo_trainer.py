@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import yaml
 from ultralytics import YOLO
+import shutil
+import random
 
 def create_yolo_dataset_structure(dataset_path, classes):
     """
@@ -11,10 +13,9 @@ def create_yolo_dataset_structure(dataset_path, classes):
     dataset_path = Path(dataset_path)
     
     # Create directories
-    (dataset_path / 'train' / 'images').mkdir(parents=True, exist_ok=True)
-    (dataset_path / 'train' / 'labels').mkdir(parents=True, exist_ok=True)
-    (dataset_path / 'val' / 'images').mkdir(parents=True, exist_ok=True)
-    (dataset_path / 'val' / 'labels').mkdir(parents=True, exist_ok=True)
+    for split in ['train', 'val']:
+        (dataset_path / split / 'images').mkdir(parents=True, exist_ok=True)
+        (dataset_path / split / 'labels').mkdir(parents=True, exist_ok=True)
     
     # Create data.yaml
     data_yaml = {
@@ -35,33 +36,70 @@ def split_dataset(raw_path, dataset_path, train_ratio=0.8):
     """
     Split raw dataset into train/val sets
     """
-    from shutil import copy2
-    import random
-    
     raw_path = Path(raw_path)
     dataset_path = Path(dataset_path)
     
-    images = list((raw_path / 'images').glob('*.*'))
+    # Find images
+    # We look for images in both root and 'images' subdir to be safe
+    images = []
+    if (raw_path / 'images').exists():
+        images.extend(list((raw_path / 'images').glob('*.*')))
+    
+    # Also check root for images if empty (fallback)
+    if not images:
+        images.extend([f for f in raw_path.glob('*.*') if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.webp', '.bmp']])
+    
+    # Filter only valid images
+    images = [img for img in images if img.suffix.lower() in ['.jpg', '.jpeg', '.png', '.webp', '.bmp']]
+    
+    if not images:
+        print(f"Error: No images found in {raw_path}")
+        return
+        
     random.shuffle(images)
     
     split_idx = int(len(images) * train_ratio)
     train_images = images[:split_idx]
     val_images = images[split_idx:]
     
+    print(f"Splitting dataset: {len(train_images)} training, {len(val_images)} validation", flush=True)
+    
+    # Function to copy pair
+    def copy_pair(img_path, split_name):
+        # Copy image
+        shutil.copy2(img_path, dataset_path / split_name / 'images' / img_path.name)
+        
+        # Find label
+        # Labels are expected in 'labels' sibling folder or same folder
+        # Logic: 
+        # 1. Check raw_path/labels/name.txt
+        # 2. Check img_path.parent/../labels/name.txt
+        # 3. Check img_path.parent/name.txt
+        
+        label_name = img_path.stem + '.txt'
+        label_candidates = [
+            raw_path / 'labels' / label_name,
+            img_path.parent.parent / 'labels' / label_name,
+            img_path.parent / label_name
+        ]
+        
+        label_found = False
+        for label_path in label_candidates:
+            if label_path.exists():
+                shutil.copy2(label_path, dataset_path / split_name / 'labels' / label_name)
+                label_found = True
+                break
+        
+        if not label_found:
+            # Create empty label file if not found (background image)
+            (dataset_path / split_name / 'labels' / label_name).touch()
+
     # Copy images and labels
     for img in train_images:
-        copy2(img, dataset_path / 'train' / 'images' / img.name)
-        label = raw_path / 'labels' / (img.stem + '.txt')
-        if label.exists():
-            copy2(label, dataset_path / 'train' / 'labels' / label.name)
+        copy_pair(img, 'train')
     
     for img in val_images:
-        copy2(img, dataset_path / 'val' / 'images' / img.name)
-        label = raw_path / 'labels' / (img.stem + '.txt')
-        if label.exists():
-            copy2(label, dataset_path / 'val' / 'labels' / label.name)
-    
-    print(f"Split dataset: {len(train_images)} train, {len(val_images)} val")
+        copy_pair(img, 'val')
 
 def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir):
     """
@@ -69,6 +107,8 @@ def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir):
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Starting training for {epochs} epochs...", flush=True)
     
     # Load pretrained YOLOv8n (nano - smallest, fastest)
     model = YOLO('yolov8n.pt')
@@ -81,12 +121,13 @@ def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir):
         imgsz=img_size,
         project=str(output_dir),
         name='custom_model',
-        exist_ok=True
+        exist_ok=True,
+        verbose=True
     )
     
     # Export best model
     best_model = output_dir / 'custom_model' / 'weights' / 'best.pt'
-    print(f"Training complete! Best model: {best_model}")
+    print(f"Training complete! Best model saved at: {best_model}", flush=True)
     
     return best_model
 
@@ -97,25 +138,23 @@ if __name__ == "__main__":
     parser.add_argument('--batch', type=int, default=16)
     parser.add_argument('--img', type=int, default=640)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--class-names', required=True, help='Comma separated class names')
     
     args = parser.parse_args()
     
-    # Detect classes from labels
-    labels_path = Path(args.data) / 'labels'
-    classes = set()
-    if labels_path.exists():
-        for label_file in labels_path.glob('*.txt'):
-            with open(label_file) as f:
-                for line in f:
-                    if line.strip():
-                        class_id = int(line.split()[0])
-                        classes.add(class_id)
-    
-    classes = sorted(list(classes))
-    class_names = [f'Class_{i}' for i in classes]  # Default names, should be loaded from config
+    # Parse class names
+    class_names = [c.strip() for c in args.class_names.split(',')]
+    print(f"Classes: {class_names}", flush=True)
     
     # Create dataset structure
-    dataset_path = Path(args.data).parent / 'yolo_dataset'
+    # We create a temporary formatted dataset next to the raw data
+    dataset_path = Path(args.data).parent / 'yolo_formatted_dataset'
+    
+    # Clean up previous run
+    if dataset_path.exists():
+        shutil.rmtree(dataset_path)
+    dataset_path.mkdir(parents=True)
+        
     yaml_path = create_yolo_dataset_structure(dataset_path, class_names)
     
     # Split dataset
@@ -123,4 +162,3 @@ if __name__ == "__main__":
     
     # Train
     train_yolo_model(yaml_path, args.epochs, args.batch, args.img, args.output)
-
