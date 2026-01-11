@@ -197,6 +197,20 @@ ipcMain.handle('read-file', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('get-base-model-path', () => {
+  return path.join(__dirname, '../../yolov8n.pt');
+});
+
+ipcMain.handle('get-trained-model-path', async () => {
+  const modelPath = path.join(__dirname, '../../models/custom_model/weights/best.pt');
+  try {
+    if (await fs.pathExists(modelPath)) {
+        return modelPath;
+    }
+  } catch(e) {}
+  return null;
+});
+
 ipcMain.handle('list-files', async (event, dirPath) => {
   try {
     const exists = await fs.pathExists(dirPath);
@@ -206,4 +220,72 @@ ipcMain.handle('list-files', async (event, dirPath) => {
   } catch (e) {
     return [];
   }
+});
+
+ipcMain.handle('select-file', async (event, filters) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: filters || []
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle('predict-image', async (event, { modelPath, imagePath, conf }) => {
+  return new Promise((resolve, reject) => {
+    const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
+    const scriptPath = path.join(__dirname, '../../python/predict.py');
+    const confidence = conf || 0.25;
+    
+    const pythonProcess = spawn(pythonPath, [
+      scriptPath,
+      '--model', modelPath,
+      '--source', imagePath,
+      '--conf', confidence.toString()
+    ]);
+
+    let output = '';
+    let resultPath = '';
+    let detections = [];
+
+    pythonProcess.stdout.on('data', (d) => {
+      const line = d.toString();
+      output += line;
+      
+      // Look for result path
+      const markerIndex = line.indexOf('OUTPUT_PATH:');
+      if (markerIndex !== -1) {
+        const remaining = line.substring(markerIndex + 'OUTPUT_PATH:'.length);
+        resultPath = remaining.split('\n')[0].trim();
+      }
+
+      // Look for JSON output
+      const jsonMarkerIndex = line.indexOf('JSON_OUTPUT:');
+      if (jsonMarkerIndex !== -1) {
+        const remaining = line.substring(jsonMarkerIndex + 'JSON_OUTPUT:'.length);
+        const jsonStr = remaining.split('\n')[0].trim();
+        try {
+            detections = JSON.parse(jsonStr);
+        } catch (e) {
+            console.error('Failed to parse detection JSON:', e);
+        }
+      }
+    });
+    
+    pythonProcess.stderr.on('data', (d) => {
+      console.error(`Prediction Info: ${d}`);
+    });
+
+    pythonProcess.on('close', (code) => {
+      if (code === 0 && resultPath) {
+        resolve({ success: true, resultPath: resultPath, output: output, detections: detections });
+      } else {
+        if (code === 0) {
+           // Fallback if marker not found but exit 0, though predict.py ensures it prints it
+           reject(new Error(`Prediction finished but no output path found. Output: ${output}`));
+        } else {
+           reject(new Error(`Prediction failed with code ${code}. Output: ${output}`));
+        }
+      }
+    });
+  });
 });

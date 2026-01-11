@@ -110,20 +110,54 @@ def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir):
     
     print(f"Starting training for {epochs} epochs...", flush=True)
     
-    # Load pretrained YOLOv8n (nano - smallest, fastest)
-    model = YOLO('yolov8n.pt')
+    # Load model (pretrained or resume)
+    if 'last.pt' in str(data_yaml) or str(data_yaml).endswith('.pt'):
+         # Resume training logic if path to .pt is passed instead of yaml
+         # But usually 'resume=True' is used with the .pt file
+         pass
+
+    # Determine model to load
+    # User wants to start a NEW training session but using weights from the previous run (last.pt).
+    # This is "Fine-Tuning", not "Resuming".
+    
+    last_pt_path = Path(output_dir) / 'custom_model/weights/last.pt'
+    best_pt_path = Path(output_dir) / 'custom_model/weights/best.pt'
+    
+    model_path = 'yolov8n.pt' # Default fallback
+    
+    if last_pt_path.exists():
+         print(f"Found last.pt, using it as starting weights for new training...", flush=True)
+         model_path = str(last_pt_path)
+    elif best_pt_path.exists():
+         print(f"Found best.pt, using it as starting weights for new training...", flush=True)
+         model_path = str(best_pt_path)
+    else:
+         print("No previous model found, starting from base yolov8n.pt...", flush=True)
+    
+    try:
+        model = YOLO(model_path)
+    except Exception as e:
+        print(f"Error loading model {model_path}: {e}", flush=True)
+        print("Falling back to yolov8n.pt...", flush=True)
+        model = YOLO('yolov8n.pt')
     
     # Train
-    results = model.train(
-        data=str(data_yaml),
-        epochs=epochs,
-        batch=batch_size,
-        imgsz=img_size,
-        project=str(output_dir),
-        name='custom_model',
-        exist_ok=True,
-        verbose=True
-    )
+    # We set resume=False explicitly to start a new session (Epoch 1)
+    try:
+        results = model.train(
+            data=str(data_yaml),
+            epochs=epochs,
+            batch=batch_size,
+            imgsz=img_size,
+            project=str(output_dir),
+            name='custom_model',
+            exist_ok=True,
+            verbose=True,
+            resume=False
+        )
+    except Exception as e:
+        print(f"\nTraining failed: {e}", flush=True)
+        raise e
     
     # Export best model
     best_model = output_dir / 'custom_model' / 'weights' / 'best.pt'

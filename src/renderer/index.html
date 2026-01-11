@@ -309,6 +309,10 @@
                 <i class="bi bi-cpu"></i> Train Model
                 <div id="status-train" class="status-indicator status-pending"></div>
             </a>
+            <a class="nav-link" onclick="showPage('test')">
+                <i class="bi bi-crosshair"></i> Test Model
+                <div id="status-test" class="status-indicator status-pending"></div>
+            </a>
         </nav>
     </div>
 
@@ -412,7 +416,7 @@
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-floating">
-                                                <input type="number" class="form-control text-white" id="image-limit" value="100" min="1" max="1000" placeholder="Limit">
+                                                <input type="number" class="form-control text-white" id="image-limit" value="500" min="1" max="10000" placeholder="Limit">
                                                 <label for="image-limit">Image Limit</label>
                                             </div>
                                         </div>
@@ -515,24 +519,29 @@
             <!-- Top Controls -->
             <div class="card mb-3 w-100 flex-shrink-0">
                 <div class="card-body py-2">
-                    <div class="row align-items-center g-3">
+                    <div class="row align-items-center g-2">
                         <div class="col-md-3">
-                            <button class="btn btn-secondary w-100" id="btn-load-dataset" onclick="handleLoadDataset()">
-                                <i class="bi bi-folder2-open me-2"></i>Load Dataset
+                            <button class="btn btn-secondary w-100 btn-sm" id="btn-load-dataset" onclick="handleLoadDataset()">
+                                <i class="bi bi-folder2-open me-1"></i>Load Dataset
                             </button>
                         </div>
-                        <div class="col-md-4">
-                            <select class="form-select" id="annotation-class-select">
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="annotation-class-select">
                                 <option selected disabled>Select Class...</option>
                             </select>
-                    </div>
-                        <div class="col-md-5 text-end">
-                             <span class="text-white me-3" id="image-counter">0 / 0</span>
-                             <span class="badge bg-danger" id="current-file-name">No file</span>
-                    </div>
+                        </div>
+                        <div class="col-md-3">
+                             <button class="btn btn-outline-warning w-100 btn-sm" id="btn-auto-label" onclick="handleAutoLabel()" title="Auto-label using trained model">
+                                <i class="bi bi-magic me-1"></i>Auto-Label
+                            </button>
+                        </div>
+                        <div class="col-md-3 text-end">
+                             <span class="text-white small me-2" id="image-counter">0 / 0</span>
+                             <span class="badge bg-danger text-truncate" style="max-width: 80px;" id="current-file-name">No file</span>
                         </div>
                     </div>
                 </div>
+            </div>
 
             <!-- Main Canvas Area (Fills space) -->
             <div id="annotation-container">
@@ -555,7 +564,7 @@
                         id="btn-floating-next" 
                         style="width: 50px; height: 50px; z-index: 100; opacity: 0.8;"
                         onclick="saveAnnotation()"
-                        title="Save & Next (Enter / Right Arrow)">
+                        title="Save & Next (Space / Enter / Right Arrow)">
                     <i class="bi bi-chevron-right fs-4"></i>
                 </button>
             </div>
@@ -601,9 +610,9 @@
                                             <input type="text" class="form-control" id="train-dataset-path" readonly>
                                             <button class="btn btn-secondary" type="button" id="btn-select-train-dataset">
                                                 Select
-                                </button>
-                            </div>
-                        </div>
+                                            </button>
+                                        </div>
+                                    </div>
                                     <div class="col-md-2">
                                         <label class="form-label text-white">Epochs</label>
                                         <input type="number" class="form-control" id="epochs" value="50">
@@ -627,17 +636,78 @@
                     </div>
 
                     <!-- Terminal Output Section -->
-                    <div class="col-lg-12 flex-grow-1" style="min-height: 0;">
+                    <div class="col-lg-12 flex-grow-1" style="min-height: 0; height: 400px;">
                         <div class="card h-100 d-flex flex-column">
                             <div class="card-header bg-black text-white border-bottom border-dark d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-terminal me-2"></i>Training Log</span>
                                 <span class="badge bg-secondary" id="training-status-badge">Idle</span>
                             </div>
                             <div class="card-body p-0 flex-grow-1" style="background-color: #000; overflow: hidden;">
-                                <div id="training-log" class="terminal-log">
+                                <div id="training-log" class="terminal-log" style="height: 100%; overflow-y: auto;">
                                     <div class="text-success">> Ready to initialize training sequence...</div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Model Page -->
+        <div id="page-test" class="page-container">
+            <div class="content-wrapper">
+                <div class="row h-100 g-4">
+                    <div class="col-lg-12">
+                         <div class="card h-100">
+                             <div class="card-header text-center py-3">
+                                 <h3 class="mb-0 text-white"><i class="bi bi-crosshair me-2"></i>Test Model</h3>
+                             </div>
+                             <div class="card-body p-4 d-flex flex-column">
+                                 <form id="test-form" class="row g-3">
+                                     <div class="col-md-6">
+                                         <label class="form-label text-white">Model Path</label>
+                                         <div class="input-group">
+                                             <input type="text" class="form-control" id="test-model-path" readonly value="models/custom_model/weights/best.pt">
+                                             <button class="btn btn-secondary" type="button" onclick="selectModelFile()">Select .pt</button>
+                                             <button class="btn btn-outline-info" type="button" onclick="useBaseModel()" title="Use standard YOLOv8n (detects 80 common classes)">
+                                                 <i class="bi bi-box-seam"></i> Base
+                                             </button>
+                                         </div>
+                                     </div>
+                                     <div class="col-md-6">
+                                         <label class="form-label text-white">Image to Test</label>
+                                         <div class="input-group">
+                                             <input type="text" class="form-control" id="test-image-path" readonly placeholder="Select an image...">
+                                             <button class="btn btn-secondary" type="button" onclick="selectTestImage()">Select Image</button>
+                                         </div>
+                                     </div>
+                                     <div class="col-md-12">
+                                         <label class="form-label text-white d-flex justify-content-between">
+                                             <span>Confidence Threshold</span>
+                                             <span id="conf-value">0.25</span>
+                                         </label>
+                                         <input type="range" class="form-range" id="conf-threshold" min="0.01" max="1.0" step="0.01" value="0.25" oninput="document.getElementById('conf-value').innerText = this.value">
+                                     </div>
+                                     <div class="col-12 text-center mt-3">
+                                         <button type="button" class="btn btn-primary px-5" onclick="runPrediction()">
+                                             <i class="bi bi-play-fill me-2"></i>Run Prediction
+                                         </button>
+                                     </div>
+                                 </form>
+                                 
+                                 <div class="flex-grow-1 mt-4 position-relative d-flex justify-content-center align-items-center bg-black border border-secondary rounded overflow-hidden" style="min-height: 400px;">
+                                     <div id="test-result-placeholder" class="text-muted">
+                                         <i class="bi bi-image fs-1 d-block text-center mb-2"></i>
+                                         Result will appear here
+                                     </div>
+                                     <img id="test-result-image" src="" style="max-width: 100%; max-height: 100%; display: none; object-fit: contain;">
+                                     <div id="prediction-spinner" class="spinner-border text-primary position-absolute" role="status" style="display: none;">
+                                         <span class="visually-hidden">Loading...</span>
+                                     </div>
+                                 </div>
+                                 <div id="prediction-logs" class="mt-3 p-3 bg-black border border-secondary rounded font-monospace small" style="display: none; max-height: 150px; overflow-y: auto;"></div>
+                             </div>
+                         </div>
                     </div>
                 </div>
             </div>

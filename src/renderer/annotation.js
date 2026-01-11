@@ -7,6 +7,7 @@ window.handleLoadDataset = handleLoadDataset;
 window.saveAnnotation = saveAnnotation;
 window.clearAnnotations = clearAnnotations;
 window.undoAnnotation = undoAnnotation;
+window.handleAutoLabel = handleAutoLabel;
 
 // Initialize
 if (document.readyState === 'loading') {
@@ -27,7 +28,7 @@ function init() {
         // Ignore if typing in an input
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         
-        if (e.key === 'Enter' || e.key === 'ArrowRight') {
+        if (e.key === 'Enter' || e.key === 'ArrowRight' || e.code === 'Space') {
             e.preventDefault(); // Prevent scrolling
             saveAnnotation();
         } else if (e.key === 'ArrowLeft') {
@@ -45,7 +46,7 @@ function init() {
     // ... rest of init
     
     // Load default classes
-    classes = ['AltGirl', 'Bimbo', 'Nerdy', 'Armpits'];
+    classes = [];
     selectedClass = classes[0];
     
     // Navigation - menu items
@@ -382,7 +383,7 @@ function renderClasses() {
     if (classesList) {
         classesList.innerHTML = '';
         if (classes.length === 0) {
-            classesList.innerHTML = '<p class="text-muted text-center">No classes yet. Add your first class above.</p>';
+            classesList.innerHTML = '<p class="text-muted text-center text-white-50">No classes yet. Add your first class above.</p>';
         } else {
             classes.forEach((cls, idx) => {
                 const badge = document.createElement('span');
@@ -955,6 +956,94 @@ async function saveAnnotation() {
     }
 }
 
+async function handleAutoLabel() {
+    if (images.length === 0 || !currentImage) {
+        showMessage('No image loaded', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-auto-label');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        // Get path to best.pt
+        const modelPath = await ipcRenderer.invoke('get-trained-model-path');
+        
+        if (!modelPath) {
+             showMessage('No trained model found (models/custom_model/weights/best.pt). Train a model first!', 'warning');
+             btn.disabled = false;
+             btn.innerHTML = originalText;
+             return;
+        }
+
+        // Current image path
+        // We need the file system path, not the file:// URL
+        // We can reconstruct it from the logic in loadImage or just strip file://
+        let imagePath = currentImage.src;
+        if (imagePath.startsWith('file://')) {
+            // decodeURIComponent is important for spaces/special chars
+            imagePath = decodeURIComponent(imagePath.slice(7));
+        }
+
+        // Run prediction
+        const result = await ipcRenderer.invoke('predict-image', {
+            modelPath: modelPath,
+            imagePath: imagePath,
+            conf: 0.25
+        });
+
+        if (result.success && result.detections) {
+            const newAnnotations = result.detections.map(d => {
+                // Ensure class exists in our list, if not add it or map to 'Unknown'
+                if (!classes.includes(d.class_name)) {
+                    // Option: Add it? Or just warn?
+                    // For now, let's keep it.
+                }
+
+                return {
+                    x: d.x_center - d.width / 2,
+                    y: d.y_center - d.height / 2,
+                    w: d.width,
+                    h: d.height,
+                    centerX: d.x_center,
+                    centerY: d.y_center,
+                    width: d.width,
+                    height: d.height,
+                    className: d.class_name
+                };
+            });
+
+            if (newAnnotations.length > 0) {
+                if (currentAnnotations.length > 0) {
+                    if (!confirm(`Found ${newAnnotations.length} objects. Replace existing annotations?`)) {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        return;
+                    }
+                }
+                
+                currentAnnotations = newAnnotations;
+                drawAnnotations();
+                updateAnnotationCount();
+                showMessage(`Auto-labeled ${newAnnotations.length} objects!`, 'success');
+            } else {
+                showMessage('No objects detected by the model.', 'info');
+            }
+        } else {
+             throw new Error('Prediction failed or no output.');
+        }
+
+    } catch (e) {
+        console.error(e);
+        showMessage('Auto-label error: ' + e.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
 function navigateImage(direction) {
     const newIndex = currentImageIndex + direction;
     if (newIndex >= 0 && newIndex < images.length) {
@@ -1048,3 +1137,105 @@ function updateStats() {
     if (statImages) statImages.textContent = images.length || '0';
     if (statModels) statModels.textContent = '0';
 }
+
+// Test Model Functions
+window.selectModelFile = async function() {
+    const path = await ipcRenderer.invoke('select-file', [
+        { name: 'YOLO Model', extensions: ['pt'] }
+    ]);
+    if (path) {
+        document.getElementById('test-model-path').value = path;
+    }
+};
+
+window.useBaseModel = async function() {
+    const path = await ipcRenderer.invoke('get-base-model-path');
+    if (path) {
+        document.getElementById('test-model-path').value = path;
+        showMessage('Selected base YOLOv8n model (trained on COCO dataset)', 'info');
+    }
+};
+
+window.selectTestImage = async function() {
+    const path = await ipcRenderer.invoke('select-file', [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }
+    ]);
+    if (path) {
+        document.getElementById('test-image-path').value = path;
+    }
+};
+
+window.runPrediction = async function() {
+    const modelPath = document.getElementById('test-model-path').value;
+    const imagePath = document.getElementById('test-image-path').value;
+    const confThreshold = document.getElementById('conf-threshold').value;
+    
+    const resultImg = document.getElementById('test-result-image');
+    const placeholder = document.getElementById('test-result-placeholder');
+    const spinner = document.getElementById('prediction-spinner');
+    const logsDiv = document.getElementById('prediction-logs');
+    
+    if (!modelPath || !imagePath) {
+        showMessage('Please select both a model and an image.', 'warning');
+        return;
+    }
+    
+    // UI Loading state
+    resultImg.style.display = 'none';
+    placeholder.style.display = 'none';
+    spinner.style.display = 'block';
+    if (logsDiv) logsDiv.style.display = 'none';
+    
+    try {
+        const result = await ipcRenderer.invoke('predict-image', { 
+            modelPath, 
+            imagePath,
+            conf: parseFloat(confThreshold)
+        });
+        
+        if (result.success && result.resultPath) {
+            // Append a timestamp to bypass cache
+            const cacheBuster = `?t=${new Date().getTime()}`;
+            // Use file:// protocol explicitly for Electron
+            resultImg.src = `file://${result.resultPath}${cacheBuster}`;
+            resultImg.style.display = 'block';
+            spinner.style.display = 'none';
+            showMessage('Prediction complete!', 'success');
+            
+            // Show logs
+            if (logsDiv) {
+                // Filter output for "Detected:" lines or "No detections"
+                const lines = result.output.split('\n')
+                    .filter(line => line.includes('Detected:') || line.includes('No detections'))
+                    .join('<br>');
+                
+                if (lines) {
+                    logsDiv.innerHTML = lines;
+                    logsDiv.style.display = 'block';
+                    logsDiv.className = lines.includes('No detections') ? 
+                        'mt-3 p-3 bg-black border border-warning text-warning rounded font-monospace small' :
+                        'mt-3 p-3 bg-black border border-success text-success rounded font-monospace small';
+                } else {
+                    // Fallback if output format is unexpected
+                    logsDiv.innerHTML = 'Prediction finished. (No detection details)';
+                    logsDiv.style.display = 'block';
+                    logsDiv.className = 'mt-3 p-3 bg-black border border-secondary text-white rounded font-monospace small';
+                }
+            }
+        } else {
+            throw new Error('No result path returned.');
+        }
+    } catch (e) {
+        console.error(e);
+        spinner.style.display = 'none';
+        placeholder.style.display = 'block';
+        placeholder.innerHTML = `<i class="bi bi-exclamation-triangle fs-1 text-danger mb-2"></i><br>Error: ${e.message}`;
+        showMessage('Prediction failed: ' + e.message, 'danger');
+        
+        if (logsDiv) {
+            logsDiv.innerHTML = `Error: ${e.message}`;
+            logsDiv.style.display = 'block';
+            logsDiv.className = 'mt-3 p-3 bg-black border border-danger text-danger rounded font-monospace small';
+        }
+    }
+};
