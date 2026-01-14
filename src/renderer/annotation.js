@@ -1,3 +1,15 @@
+// Three-Step System state
+let threeStepSystemEnabled = false;
+let threeStepStage = 1; // 1, 2, or 3
+let threeStepClassName = '';
+let threeStepBasePath = '';
+let threeStepModelPath = '';
+
+// Admin mode state
+let adminModeEnabled = false;
+let logoClickTimes = [];
+const LOGO_CLICK_TIMEOUT = 1000; // 1 second window for 3 clicks
+
 // Make functions available globally for onclick handlers
 window.showPage = showPage;
 window.handleDownload = handleDownload;
@@ -9,6 +21,9 @@ window.clearAnnotations = clearAnnotations;
 window.undoAnnotation = undoAnnotation;
 window.handleAutoLabel = handleAutoLabel;
 window.toggleAutoLabel = toggleAutoLabel;
+window.toggleThreeStepSystem = toggleThreeStepSystem;
+window.toggleAdminMode = toggleAdminMode;
+window.handleFinishAnnotate = handleFinishAnnotate;
 
 // Initialize
 if (document.readyState === 'loading') {
@@ -46,6 +61,15 @@ function init() {
     
     // Load and display statistics
     updateStats();
+    
+    // Load three-step system state
+    loadThreeStepSystemState();
+    
+    // Load admin mode state
+    loadAdminModeState();
+    
+    // Setup logo click handler for admin mode
+    setupAdminModeToggle();
     
     // ... rest of init
     
@@ -539,8 +563,17 @@ async function handleDownload(e) {
     
     const subreddit = subredditInput.value.trim();
     const className = classNameInput.value.trim() || 'Default';
-    const limit = parseInt(limitInput.value) || 100;
-    const outputDir = outputDirInput ? outputDirInput.value.trim() : '';
+    let limit = parseInt(limitInput.value) || 100;
+    let outputDir = outputDirInput ? outputDirInput.value.trim() : '';
+    
+    // Three-step system: force limit to 1000 (or 100 if admin mode)
+    if (threeStepSystemEnabled) {
+        limit = adminModeEnabled ? 100 : 1000;
+        if (!className) {
+            showMessage('msg-enter-class-name', 'warning');
+            return;
+        }
+    }
     
     if (!subreddit) {
         showMessage('msg-enter-subreddit', 'warning');
@@ -556,20 +589,133 @@ async function handleDownload(e) {
     }
     
     try {
-        const result = await ipcRenderer.invoke('download-reddit-images', {
-            subreddit,
-            limit,
-            class_name: className,
-            output_dir: outputDir
-        });
+        let result;
         
-        // Update statistics
-        incrementDatasets();
-        // Try to get actual downloaded count from result, fallback to limit
-        const downloadedCount = result?.downloaded || limit;
-        incrementImages(downloadedCount);
+        if (threeStepSystemEnabled) {
+            // Three-step system: download to temp location first, then distribute
+            // Use user-selected path or default temp path for initial download
+            const tempOutputDir = await ipcRenderer.invoke('get-default-temp-path');
+            result = await ipcRenderer.invoke('download-reddit-images', {
+                subreddit,
+                limit,
+                class_name: className,
+                output_dir: tempOutputDir
+            });
+            
+            const downloadedCount = result?.downloaded || limit;
+            
+            // Distribute images to folders (15%, 35%, 50%)
+            // Use user-selected path if provided, otherwise use default
+            const basePath = outputDir || await ipcRenderer.invoke('get-default-datasets-path');
+            const sourcePath = await ipcRenderer.invoke('join-path', [tempOutputDir, className]);
+            
+            console.log('Distributing images:', {
+                sourcePath: sourcePath,
+                basePath: basePath,
+                className: className,
+                totalCount: downloadedCount,
+                userSelectedPath: outputDir
+            });
+            
+            // Check if source path exists
+            const sourceExists = await ipcRenderer.invoke('file-exists', sourcePath);
+            if (!sourceExists) {
+                console.error('Source path does not exist:', sourcePath);
+                showMessage('msg-download-error:Source folder not found after download', 'danger');
+                downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
+                downloadBtn.disabled = false;
+                return;
+            }
+            
+            try {
+                const distributionResult = await ipcRenderer.invoke('distribute-three-step-images', {
+                    sourcePath: sourcePath,
+                    basePath: basePath,
+                    className: className,
+                    totalCount: downloadedCount
+                });
+                
+                console.log('Distribution result:', distributionResult);
+                
+                // Verify that the class folder was created
+                if (distributionResult && distributionResult.basePath) {
+                    const classFolderExists = await ipcRenderer.invoke('file-exists', distributionResult.basePath);
+                    console.log('Class folder exists:', classFolderExists, 'at:', distributionResult.basePath);
+                    
+                    // Verify subfolders
+                    const folder15 = await ipcRenderer.invoke('join-path', [distributionResult.basePath, `${className}_15`]);
+                    const folder15Exists = await ipcRenderer.invoke('file-exists', folder15);
+                    console.log('Folder 15 exists:', folder15Exists, 'at:', folder15);
+                    
+                    if (!folder15Exists) {
+                        console.error('Folder 15 was not created!');
+                        showMessage('msg-download-error:Failed to create folder structure', 'danger');
+                        downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
+                        downloadBtn.disabled = false;
+                        return;
+                    }
+                }
+                
+                // Save three-step system state
+                setThreeStepClassName(className);
+                if (distributionResult && distributionResult.basePath) {
+                    setThreeStepBasePath(distributionResult.basePath);
+                    console.log('Three-step base path saved:', distributionResult.basePath);
+                } else {
+                    console.error('Distribution result missing basePath:', distributionResult);
+                    showMessage('msg-download-error:Failed to create folder structure', 'danger');
+                    downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
+                    downloadBtn.disabled = false;
+                    return;
+                }
+                
+                setThreeStepStage(1);
+                
+                // Auto-add class to classes list
+                if (!classes.includes(className)) {
+                    classes.push(className);
+                    selectedClass = className;
+                    saveClasses();
+                    renderClasses();
+                }
+                
+                // Update statistics
+                incrementDatasets();
+                incrementImages(downloadedCount);
+                
+                showMessage('msg-download-complete', 'success');
+                // Auto-navigate to annotate page
+                setTimeout(() => {
+                    showPage('annotate');
+                    // Wait a bit more for page to be ready
+                    setTimeout(() => {
+                        setupThreeStepAnnotation();
+                    }, 500);
+                }, 1000);
+            } catch (error) {
+                console.error('Error during distribution:', error);
+                showMessage(`msg-download-error:${error.message}`, 'danger');
+                downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
+                downloadBtn.disabled = false;
+                return;
+            }
+        } else {
+            // Normal download
+            result = await ipcRenderer.invoke('download-reddit-images', {
+                subreddit,
+                limit,
+                class_name: className,
+                output_dir: outputDir
+            });
+            
+            // Update statistics
+            incrementDatasets();
+            const downloadedCount = result?.downloaded || limit;
+            incrementImages(downloadedCount);
+            
+            showMessage('msg-download-complete', 'success');
+        }
         
-        showMessage('msg-download-complete', 'success');
         downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
         checkWorkflowStatus();
     } catch (e) {
@@ -767,6 +913,15 @@ async function loadImage(index) {
                 // Small delay to ensure image is fully loaded
                 setTimeout(() => {
                     handleAutoLabel(true); // Pass true to indicate auto-triggered
+                    
+                    // Three-step system stage 3: auto-advance after auto-label
+                    if (threeStepSystemEnabled && getThreeStepStage() === 3) {
+                        setTimeout(() => {
+                            if (currentImageIndex < images.length - 1) {
+                                navigateImage(1);
+                            }
+                        }, 1000);
+                    }
                 }, 300);
             }
         });
@@ -1030,8 +1185,22 @@ async function saveAnnotation() {
         // Clear annotations for the next image
         currentAnnotations = []; // IMPORTANT: Clear current annotations
         
-        // Move to next
-        navigateImage(1);
+        // Three-step system: check if stage 3 and auto-advance
+        if (threeStepSystemEnabled && getThreeStepStage() === 3) {
+            // Stage 3: auto-advance to next image
+            const autoBtn = document.getElementById('btn-auto-label');
+            if (autoBtn && autoBtn.classList.contains('active')) {
+                // Auto mode is on, advance automatically
+                setTimeout(() => {
+                    navigateImage(1);
+                }, 500);
+            } else {
+                navigateImage(1);
+            }
+        } else {
+            // Move to next
+            navigateImage(1);
+        }
     } catch (e) {
         showMessage(`msg-save-error:${e.message}`, 'danger');
     }
@@ -1080,7 +1249,13 @@ async function handleAutoLabel(autoTriggered = false) {
 
     try {
         // Get path to best.pt
-        const modelPath = await ipcRenderer.invoke('get-trained-model-path');
+        // Three-step system: use saved model path if available
+        let modelPath;
+        if (threeStepSystemEnabled && threeStepModelPath) {
+            modelPath = threeStepModelPath;
+        } else {
+            modelPath = await ipcRenderer.invoke('get-trained-model-path');
+        }
         
         if (!modelPath) {
              if (!autoTriggered) {
@@ -1186,27 +1361,66 @@ async function startTraining() {
     
     if (!trainBtn) return;
     
-    // Auto-fill path if empty and we have a current one
-    if (trainDatasetPath && !trainDatasetPath.value && currentDatasetPath) {
-        trainDatasetPath.value = currentDatasetPath;
+    let datasetPath;
+    let epochs, batchSize, imgSize;
+    
+    if (threeStepSystemEnabled) {
+        // Three-step system: use configured paths
+        // Reload state to ensure we have latest values
+        threeStepBasePath = getThreeStepBasePath();
+        threeStepClassName = getThreeStepClassName();
+        
+        const stage = getThreeStepStage();
+        console.log('Start training for three-step system, stage:', stage);
+        
+        if (stage === 3.5) {
+            // Final training: use CLASSNAME_100 folder
+            const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
+            datasetPath = folder100;
+            epochs = 100;
+            console.log('Final training path:', folder100);
+        } else {
+            // Stage 1.5 or 2.5: use current stage folder
+            // Stage 1.5 = training after stage 1 (15%) -> use folder 15
+            // Stage 2.5 = training after stage 2 (35%) -> use folder 35
+            // IMPORTANT: stage is a number (1.5 or 2.5), compare as number
+            const stageNum = (stage === 1.5 || stage === '1.5') ? 1 : 2;
+            const folderName = `${threeStepClassName}_${stageNum === 1 ? '15' : '35'}`;
+            const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
+            datasetPath = stagePath;
+            console.log('Training path for stage', stage, ':', stagePath, '(folder:', folderName, ')');
+            epochs = parseInt(document.getElementById('epochs')?.value || 50);
+            // Validate epochs range
+            if (epochs < 50) epochs = 50;
+            if (epochs > 100) epochs = 100;
+        }
+        batchSize = 16;
+        imgSize = 640;
+    } else {
+        // Normal flow
+        // Auto-fill path if empty and we have a current one
+        if (trainDatasetPath && !trainDatasetPath.value && currentDatasetPath) {
+            trainDatasetPath.value = currentDatasetPath;
+        }
+        
+        datasetPath = trainDatasetPath ? trainDatasetPath.value.trim() : currentDatasetPath;
+        
+        if (!datasetPath) {
+            showMessage('msg-select-dataset', 'warning');
+            return;
+        }
+        
+        const epochsInput = document.getElementById('epochs');
+        const batchInput = document.getElementById('batch-size');
+        const imgSizeInput = document.getElementById('img-size');
+        
+        epochs = parseInt(epochsInput ? epochsInput.value : 50) || 50;
+        batchSize = parseInt(batchInput ? batchInput.value : 16) || 16;
+        imgSize = parseInt(imgSizeInput ? imgSizeInput.value : 640) || 640;
     }
     
-    const datasetPath = trainDatasetPath ? trainDatasetPath.value.trim() : currentDatasetPath;
-    
-    if (!datasetPath) {
-        showMessage('msg-select-dataset', 'warning');
-        return;
-    }
-    
-    const epochsInput = document.getElementById('epochs');
-    const batchInput = document.getElementById('batch-size');
-    const imgSizeInput = document.getElementById('img-size');
     const trainingStatus = document.getElementById('training-status-badge');
     const trainingOutput = document.getElementById('training-log');
-    
-    const epochs = parseInt(epochsInput ? epochsInput.value : 50) || 50;
-    const batchSize = parseInt(batchInput ? batchInput.value : 16) || 16;
-    const imgSize = parseInt(imgSizeInput ? imgSizeInput.value : 640) || 640;
     
     trainBtn.disabled = true;
     trainBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Training...';
@@ -1237,6 +1451,43 @@ async function startTraining() {
         if (trainingStatus) {
             trainingStatus.innerText = 'Completed';
             trainingStatus.className = 'badge bg-success';
+        }
+        
+        // Three-step system: proceed to next stage
+        if (threeStepSystemEnabled) {
+            const stage = getThreeStepStage();
+            if (stage === 1.5 || stage === 2.5) {
+                // Training complete, save model path and proceed
+                try {
+                    threeStepModelPath = await ipcRenderer.invoke('get-trained-model-path');
+                    if (!threeStepModelPath) {
+                        // Fallback to default path
+                        threeStepModelPath = await ipcRenderer.invoke('join-path', [
+                            await ipcRenderer.invoke('get-default-datasets-path'),
+                            '..', 'models', 'custom_model', 'weights', 'best.pt'
+                        ]);
+                    }
+                } catch (e) {
+                    console.error('Error getting model path:', e);
+                }
+                setTimeout(() => {
+                    proceedToNextThreeStepStage();
+                }, 1000);
+            } else if (stage === 3.5) {
+                // Final training complete
+                showMessage('msg-three-step-complete', 'success');
+                // Reset three-step system
+                threeStepSystemEnabled = false;
+                localStorage.removeItem('yolo_three_step_enabled');
+                localStorage.removeItem('yolo_three_step_stage');
+                localStorage.removeItem('yolo_three_step_class_name');
+                localStorage.removeItem('yolo_three_step_base_path');
+                // Update checkbox
+                const checkbox = document.getElementById('three-step-system');
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+            }
         }
     } catch (e) {
         showMessage(`msg-training-failed:${e.message}`, 'danger');
@@ -1395,3 +1646,402 @@ window.runPrediction = async function() {
         }
     }
 };
+
+// Admin Mode Functions
+function setupAdminModeToggle() {
+    const logoHeader = document.getElementById('logo-header');
+    if (!logoHeader) return;
+    
+    logoHeader.addEventListener('click', () => {
+        const now = Date.now();
+        logoClickTimes.push(now);
+        
+        // Keep only clicks within the timeout window
+        logoClickTimes = logoClickTimes.filter(time => now - time < LOGO_CLICK_TIMEOUT);
+        
+        // If we have 3 clicks within the timeout, show admin checkbox
+        if (logoClickTimes.length >= 3) {
+            const adminContainer = document.getElementById('admin-check-container');
+            if (adminContainer) {
+                adminContainer.style.display = 'block';
+                logoClickTimes = []; // Reset
+            }
+        }
+    });
+}
+
+function toggleAdminMode(enabled) {
+    adminModeEnabled = enabled;
+    localStorage.setItem('yolo_admin_mode_enabled', enabled ? 'true' : 'false');
+    
+    // Update three-step system UI if it's enabled
+    if (threeStepSystemEnabled) {
+        updateThreeStepSystemUI();
+    }
+}
+
+function loadAdminModeState() {
+    adminModeEnabled = localStorage.getItem('yolo_admin_mode_enabled') === 'true';
+    
+    // Update checkbox
+    const checkbox = document.getElementById('admin-check');
+    if (checkbox) {
+        checkbox.checked = adminModeEnabled;
+    }
+    
+    // Show admin container if admin mode was enabled
+    if (adminModeEnabled) {
+        const adminContainer = document.getElementById('admin-check-container');
+        if (adminContainer) {
+            adminContainer.style.display = 'block';
+        }
+    }
+}
+
+// Three-Step System Functions
+function toggleThreeStepSystem(enabled) {
+    threeStepSystemEnabled = enabled;
+    localStorage.setItem('yolo_three_step_enabled', enabled ? 'true' : 'false');
+    
+    // Update UI based on state
+    updateThreeStepSystemUI();
+}
+
+function updateThreeStepSystemUI() {
+    // Update download page
+    const limitInput = document.getElementById('image-limit');
+    if (limitInput) {
+        if (threeStepSystemEnabled) {
+            // Use 100 if admin mode is enabled, otherwise 1000
+            limitInput.value = adminModeEnabled ? 100 : 1000;
+            limitInput.disabled = true;
+            limitInput.style.opacity = '0.6';
+        } else {
+            limitInput.disabled = false;
+            limitInput.style.opacity = '1';
+        }
+    }
+}
+
+function getThreeStepStage() {
+    const stageStr = localStorage.getItem('yolo_three_step_stage') || '1';
+    // Use parseFloat to handle decimal stages (1.5, 2.5, 3.5)
+    const stage = parseFloat(stageStr);
+    return isNaN(stage) ? 1 : stage;
+}
+
+function setThreeStepStage(stage) {
+    threeStepStage = stage;
+    localStorage.setItem('yolo_three_step_stage', stage.toString());
+    console.log('Three-step stage set to:', stage, '(stored as:', stage.toString(), ')');
+}
+
+function getThreeStepClassName() {
+    return localStorage.getItem('yolo_three_step_class_name') || '';
+}
+
+function setThreeStepClassName(className) {
+    threeStepClassName = className;
+    localStorage.setItem('yolo_three_step_class_name', className);
+}
+
+function getThreeStepBasePath() {
+    return localStorage.getItem('yolo_three_step_base_path') || '';
+}
+
+function setThreeStepBasePath(basePath) {
+    threeStepBasePath = basePath;
+    localStorage.setItem('yolo_three_step_base_path', basePath);
+}
+
+// Load three-step system state on init
+function loadThreeStepSystemState() {
+    threeStepSystemEnabled = localStorage.getItem('yolo_three_step_enabled') === 'true';
+    threeStepStage = getThreeStepStage();
+    threeStepClassName = getThreeStepClassName();
+    threeStepBasePath = getThreeStepBasePath();
+    
+    // Update checkbox
+    const checkbox = document.getElementById('three-step-system');
+    if (checkbox) {
+        checkbox.checked = threeStepSystemEnabled;
+    }
+    
+    updateThreeStepSystemUI();
+    
+    // If in three-step mode and on annotate page, setup
+    if (threeStepSystemEnabled && threeStepBasePath) {
+        const annotatePage = document.getElementById('page-annotate');
+        if (annotatePage && annotatePage.classList.contains('active')) {
+            setupThreeStepAnnotation();
+        }
+    }
+}
+
+async function setupThreeStepAnnotation() {
+    if (!threeStepSystemEnabled) {
+        console.log('Three-step system not enabled');
+        return;
+    }
+    
+    // Reload state from localStorage
+    threeStepBasePath = getThreeStepBasePath();
+    threeStepClassName = getThreeStepClassName();
+    
+    if (!threeStepBasePath || !threeStepClassName) {
+        console.error('Three-step system state missing:', {
+            basePath: threeStepBasePath,
+            className: threeStepClassName
+        });
+        showMessage('msg-three-step-state-missing', 'warning');
+        return;
+    }
+    
+    console.log('Setting up three-step annotation:', {
+        basePath: threeStepBasePath,
+        className: threeStepClassName,
+        stage: getThreeStepStage()
+    });
+    
+    const stage = getThreeStepStage();
+    const folderName = `${threeStepClassName}_${stage === 1 ? '15' : stage === 2 ? '35' : '50'}`;
+    const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
+    
+    console.log('Loading dataset from:', stagePath);
+    
+    // Check if folder exists
+    const folderExists = await ipcRenderer.invoke('file-exists', stagePath);
+    if (!folderExists) {
+        console.error('Stage folder does not exist:', stagePath);
+        showMessage(`msg-folder-not-found:${folderName}`, 'danger');
+        return;
+    }
+    
+    // Block folder selection button
+    const loadDatasetBtn = document.getElementById('btn-load-dataset');
+    if (loadDatasetBtn) {
+        loadDatasetBtn.disabled = true;
+        loadDatasetBtn.style.opacity = '0.6';
+    }
+    
+    // Auto-load dataset
+    try {
+        await loadDataset(stagePath);
+    } catch (error) {
+        console.error('Error loading dataset:', error);
+        showMessage(`msg-load-error:${error.message}`, 'danger');
+    }
+    
+    // Block class selection
+    const classSelect = document.getElementById('annotation-class-select');
+    if (classSelect) {
+        classSelect.disabled = true;
+        classSelect.style.opacity = '0.6';
+        // Set class
+        if (classes.includes(threeStepClassName)) {
+            classSelect.value = threeStepClassName;
+            selectedClass = threeStepClassName;
+        }
+    }
+    
+    // Set confidence to 10%
+    const confInput = document.getElementById('auto-label-conf');
+    if (confInput) {
+        confInput.value = '0.10';
+        confInput.disabled = true;
+        confInput.style.opacity = '0.6';
+    }
+    
+    // Auto mode based on stage
+    const autoBtn = document.getElementById('btn-auto-label');
+    if (autoBtn) {
+        if (stage === 1) {
+            // Stage 1: Auto off
+            autoBtn.classList.remove('active', 'btn-warning');
+            autoBtn.classList.add('btn-outline-warning');
+        } else {
+            // Stage 2 and 3: Auto on
+            autoBtn.classList.add('active', 'btn-warning');
+            autoBtn.classList.remove('btn-outline-warning');
+        }
+    }
+}
+
+async function checkThreeStepAnnotationComplete() {
+    if (!threeStepSystemEnabled || !threeStepBasePath) return false;
+    
+    const stage = getThreeStepStage();
+    const folderName = `${threeStepClassName}_${stage === 1 ? '15' : stage === 2 ? '35' : '50'}`;
+    const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
+    
+    // Check if all images in current stage are annotated
+    // This would require checking annotation files
+    // For now, we'll use a simpler approach: check on "Finish & Train" button click
+    return true;
+}
+
+async function proceedToNextThreeStepStage() {
+    if (!threeStepSystemEnabled) return;
+    
+    const currentStage = getThreeStepStage();
+    
+    console.log('Proceeding to next three-step stage. Current stage:', currentStage);
+    
+    if (currentStage === 1) {
+        // Stage 1 complete, go to training
+        console.log('Stage 1 complete, moving to training (stage 1.5) - should use folder 15');
+        setThreeStepStage(1.5); // Training stage 1 - should use folder 15
+        showPage('train');
+        // Wait a bit for page to be ready
+        setTimeout(() => {
+            setupThreeStepTraining();
+        }, 300);
+    } else if (currentStage === 1.5) {
+        // Training stage 1 complete, go to stage 2 annotation
+        console.log('Training stage 1.5 complete, moving to annotation stage 2');
+        setThreeStepStage(2);
+        showPage('annotate');
+        setTimeout(() => {
+            setupThreeStepAnnotation();
+        }, 300);
+    } else if (currentStage === 2) {
+        // Stage 2 complete, go to training
+        console.log('Stage 2 complete, moving to training (stage 2.5) - should use folder 35');
+        setThreeStepStage(2.5); // Training stage 2 - should use folder 35
+        showPage('train');
+        setTimeout(() => {
+            setupThreeStepTraining();
+        }, 300);
+    } else if (currentStage === 2.5) {
+        // Training stage 2 complete, go to stage 3 annotation
+        console.log('Training stage 2.5 complete, moving to annotation stage 3');
+        setThreeStepStage(3);
+        showPage('annotate');
+        setTimeout(() => {
+            setupThreeStepAnnotation();
+        }, 300);
+    } else if (currentStage === 3) {
+        // Stage 3 complete, finalize
+        console.log('Stage 3 complete, finalizing');
+        await finalizeThreeStepSystem();
+    }
+}
+
+async function setupThreeStepTraining() {
+    if (!threeStepSystemEnabled) return;
+    
+    // Reload state from localStorage to ensure we have latest values
+    threeStepBasePath = getThreeStepBasePath();
+    threeStepClassName = getThreeStepClassName();
+    
+    const stage = getThreeStepStage();
+    const isFinalTraining = stage === 3.5;
+    
+    console.log('Setting up three-step training:', {
+        stage,
+        stageType: typeof stage,
+        stageValue: stage,
+        basePath: threeStepBasePath,
+        className: threeStepClassName,
+        isFinalTraining
+    });
+    
+    // Block dataset path selection
+    const datasetPathInput = document.getElementById('train-dataset-path');
+    const selectBtn = document.getElementById('btn-select-train-dataset');
+    
+    if (datasetPathInput) {
+        if (isFinalTraining) {
+            // Final training: use CLASSNAME_100 folder
+            const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
+            datasetPathInput.value = folder100;
+            console.log('Final training path:', folder100);
+        } else {
+            // Stage 1.5 or 2.5: use current stage folder
+            // Stage 1.5 = training after stage 1 (15%) -> use folder 15
+            // Stage 2.5 = training after stage 2 (35%) -> use folder 35
+            // IMPORTANT: stage is stored as string in localStorage, so we need to compare properly
+            const stageNum = (stage === 1.5 || stage === '1.5') ? 1 : 2;
+            const folderName = `${threeStepClassName}_${stageNum === 1 ? '15' : '35'}`;
+            const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
+            datasetPathInput.value = stagePath;
+            console.log('Training path calculation:', {
+                stage,
+                stageNum,
+                folderName,
+                stagePath,
+                basePath: threeStepBasePath
+            });
+        }
+        datasetPathInput.disabled = true;
+        datasetPathInput.style.opacity = '0.6';
+    }
+    
+    if (selectBtn) {
+        selectBtn.disabled = true;
+        selectBtn.style.opacity = '0.6';
+    }
+    
+    // Block batch size and image size
+    const batchInput = document.getElementById('batch-size');
+    const imgSizeInput = document.getElementById('img-size');
+    
+    if (batchInput) {
+        batchInput.value = '16';
+        batchInput.disabled = true;
+        batchInput.style.opacity = '0.6';
+    }
+    
+    if (imgSizeInput) {
+        imgSizeInput.value = '640';
+        imgSizeInput.disabled = true;
+        imgSizeInput.style.opacity = '0.6';
+    }
+    
+    // Limit epochs to 50-100
+    const epochsInput = document.getElementById('epochs');
+    if (epochsInput) {
+        if (isFinalTraining) {
+            epochsInput.value = '100';
+            epochsInput.disabled = true;
+            epochsInput.style.opacity = '0.6';
+        } else {
+            epochsInput.value = '50';
+            epochsInput.min = '50';
+            epochsInput.max = '100';
+        }
+    }
+}
+
+function handleFinishAnnotate() {
+    if (threeStepSystemEnabled) {
+        // Check if all images are annotated
+        proceedToNextThreeStepStage();
+    } else {
+        // Normal flow
+        showPage('train');
+    }
+}
+
+async function finalizeThreeStepSystem() {
+    // Collect all annotations from 3 folders into CLASSNAME_100
+    const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
+    
+    const result = await ipcRenderer.invoke('merge-three-step-annotations', {
+        basePath: threeStepBasePath,
+        className: threeStepClassName,
+        outputFolder: folder100
+    });
+    
+    if (result.success) {
+        // Start final training on all 1000 images, 100 epochs
+        setThreeStepStage(3.5);
+        showPage('train');
+        setupThreeStepTraining();
+        
+        // Auto-start training
+        setTimeout(() => {
+            startTraining();
+        }, 500);
+    }
+}

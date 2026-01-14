@@ -818,7 +818,7 @@
 
     <!-- Sidebar -->
     <div class="sidebar">
-        <div class="sidebar-header">
+        <div class="sidebar-header" id="logo-header" style="cursor: pointer;">
             <i class="bi bi-robot logo-icon"></i>
             <div>
                 <h5 class="mb-0">YOLO</h5>
@@ -904,6 +904,23 @@
                                 <h4 class="mb-0"><i class="bi bi-rocket-takeoff me-2"></i><span data-i18n="home-quick-start">Quick Start</span></h4>
                             </div>
                             <div class="card-body d-flex flex-column justify-content-around">
+                                <!-- 3-Step System Checkbox -->
+                                <div class="mb-3 p-3 bg-dark rounded">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="three-step-system" onchange="toggleThreeStepSystem(this.checked)">
+                                        <label class="form-check-label text-white" for="three-step-system" data-i18n="home-three-step">3-Step System</label>
+                                    </div>
+                                    <small class="text-muted d-block mt-2" data-i18n="home-three-step-desc">Simplified workflow for beginners</small>
+                                </div>
+                                
+                                <!-- Admin Checkbox (hidden by default) -->
+                                <div class="mb-3 p-3 bg-dark rounded" id="admin-check-container" style="display: none;">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="admin-check" onchange="toggleAdminMode(this.checked)">
+                                        <label class="form-check-label text-white" for="admin-check" data-i18n="home-admin-check">Admin Check</label>
+                                    </div>
+                                    <small class="text-muted d-block mt-2" data-i18n="home-admin-check-desc">Use 100 images instead of 1000 for testing</small>
+                                </div>
                                 <div class="text-center p-3">
                                     <i class="bi bi-reddit fs-1 text-danger mb-3"></i>
                                     <h5 data-i18n="home-download-title">1. Download</h5>
@@ -1108,7 +1125,7 @@
                         </div>
                         
                         <div class="d-flex gap-2">
-                            <button class="btn btn-outline-success ms-3" onclick="showPage('train')" id="btn-finish-train" data-i18n="annotate-finish">
+                            <button class="btn btn-outline-success ms-3" onclick="handleFinishAnnotate()" id="btn-finish-train" data-i18n="annotate-finish">
                                 Finish & Train <i class="bi bi-check-lg ms-1"></i>
                             </button>
                         </div>
@@ -1406,6 +1423,10 @@
                 'home-stats-datasets': 'Datasets',
                 'home-stats-images': 'Images',
                 'home-stats-models': 'Models',
+                'home-three-step': '3-Step System',
+                'home-three-step-desc': 'Simplified workflow for beginners',
+                'home-admin-check': 'Admin Check',
+                'home-admin-check-desc': 'Use 100 images instead of 1000 for testing',
                 // Download page
                 'download-title': 'Download Images from Reddit',
                 'download-subreddit': 'Subreddit Name',
@@ -1492,7 +1513,12 @@
                 'msg-base-model-selected': 'Selected base YOLOv8n model (trained on COCO dataset)',
                 'msg-select-model-image': 'Please select both a model and an image.',
                 'msg-prediction-complete': 'Prediction complete!',
-                'msg-prediction-failed': 'Prediction failed: {0}'
+                'msg-prediction-failed': 'Prediction failed: {0}',
+                'msg-three-step-complete': '3-Step System complete! Final model trained.',
+                'msg-enter-class-name': 'Please enter class name for 3-Step System',
+                'msg-three-step-state-missing': 'Three-step system state is missing. Please restart the download.',
+                'msg-folder-not-found': 'Folder not found: {0}',
+                'msg-load-error': 'Error loading dataset: {0}'
             },
             ru: {
                 // Sidebar
@@ -1600,7 +1626,12 @@
                 'msg-base-model-selected': 'Выбрана базовая модель YOLOv8n (обучена на наборе данных COCO)',
                 'msg-select-model-image': 'Пожалуйста, выберите модель и изображение.',
                 'msg-prediction-complete': 'Предсказание завершено!',
-                'msg-prediction-failed': 'Ошибка предсказания: {0}'
+                'msg-prediction-failed': 'Ошибка предсказания: {0}',
+                'msg-three-step-complete': 'Система 3х шагов завершена! Финальная модель обучена.',
+                'msg-enter-class-name': 'Пожалуйста, введите название класса для системы 3х шагов',
+                'msg-three-step-state-missing': 'Состояние системы 3х шагов отсутствует. Пожалуйста, перезапустите загрузку.',
+                'msg-folder-not-found': 'Папка не найдена: {0}',
+                'msg-load-error': 'Ошибка загрузки набора данных: {0}'
             },
             ja: {
                 // Sidebar
@@ -1624,6 +1655,10 @@
                 'home-stats-datasets': 'データセット',
                 'home-stats-images': '画像',
                 'home-stats-models': 'モデル',
+                'home-three-step': '3ステップシステム',
+                'home-three-step-desc': '初心者向けの簡略化されたワークフロー',
+                'home-admin-check': '管理者チェック',
+                'home-admin-check-desc': 'テスト用に1000枚の代わりに100枚の画像を使用',
                 // Download page
                 'download-title': 'Redditから画像をダウンロード',
                 'download-subreddit': 'サブレディット名',
@@ -1710,7 +1745,12 @@
                 'msg-base-model-selected': 'ベース YOLOv8n モデルを選択しました (COCO データセットで訓練済み)',
                 'msg-select-model-image': 'モデルと画像の両方を選択してください。',
                 'msg-prediction-complete': '予測が完了しました！',
-                'msg-prediction-failed': '予測に失敗しました: {0}'
+                'msg-prediction-failed': '予測に失敗しました: {0}',
+                'msg-three-step-complete': '3ステップシステムが完了しました！最終モデルが訓練されました。',
+                'msg-enter-class-name': '3ステップシステムのクラス名を入力してください',
+                'msg-three-step-state-missing': '3ステップシステムの状態がありません。ダウンロードを再起動してください。',
+                'msg-folder-not-found': 'フォルダが見つかりません: {0}',
+                'msg-load-error': 'データセットの読み込みエラー: {0}'
             },
             uz: {
                 // Sidebar
@@ -1728,6 +1768,10 @@
                 'home-download-title': '1. Yuklab olish',
                 'home-download-desc': 'Subredditlardan rasmlarni oling',
                 'home-download-btn': 'Yuklab olishga o\'tish',
+                'home-three-step': '3 bosqichli tizim',
+                'home-three-step-desc': 'Boshlang\'ichlar uchun soddalashtirilgan ish oqimi',
+                'home-admin-check': 'Admin tekshiruvi',
+                'home-admin-check-desc': 'Test qilish uchun 1000 o\'rniga 100 ta rasm ishlatish',
                 'home-annotate-title': '2. Annotatsiya',
                 'home-annotate-desc': 'Ma\'lumotlar to\'plamingizga yorliq qo\'ying',
                 'home-annotate-btn': 'Annotatsiyani boshlash',
@@ -1818,7 +1862,12 @@
                 'msg-base-model-selected': 'Asosiy YOLOv8n modeli tanlandi (COCO ma\'lumotlar to\'plamida o\'qitilgan)',
                 'msg-select-model-image': 'Iltimos, model va rasmni tanlang.',
                 'msg-prediction-complete': 'Bashorat tugadi!',
-                'msg-prediction-failed': 'Bashorat xatosi: {0}'
+                'msg-prediction-failed': 'Bashorat xatosi: {0}',
+                'msg-three-step-complete': '3 bosqichli tizim tugadi! Yakuniy model o\'qitildi.',
+                'msg-enter-class-name': 'Iltimos, 3 bosqichli tizim uchun klass nomini kiriting',
+                'msg-three-step-state-missing': '3 bosqichli tizim holati yo\'q. Iltimos, yuklab olishni qayta boshlang.',
+                'msg-folder-not-found': 'Papka topilmadi: {0}',
+                'msg-load-error': 'Ma\'lumotlar to\'plamini yuklashda xatolik: {0}'
             }
         };
 

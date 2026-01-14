@@ -116,6 +116,119 @@ ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class
   });
 });
 
+ipcMain.handle('get-default-temp-path', async () => {
+  return path.join(__dirname, '../../datasets/temp');
+});
+
+ipcMain.handle('get-default-datasets-path', async () => {
+  return path.join(__dirname, '../../datasets/raw');
+});
+
+ipcMain.handle('join-path', async (event, paths) => {
+  return path.join(...paths);
+});
+
+ipcMain.handle('distribute-three-step-images', async (event, { sourcePath, basePath, className, totalCount }) => {
+  try {
+    const fs = require('fs-extra');
+    const sourceDir = sourcePath;
+    const baseDir = basePath;
+    
+    console.log('Distribute-three-step-images called with:', {
+      sourcePath,
+      basePath,
+      className,
+      totalCount
+    });
+    
+    // Ensure base directory exists
+    await fs.ensureDir(baseDir);
+    console.log('Base directory ensured:', baseDir);
+    
+    // Create main class folder
+    const classFolder = path.join(baseDir, className);
+    await fs.ensureDir(classFolder);
+    console.log('Class folder created:', classFolder);
+    
+    // Create subfolders with YOLO structure (images and labels)
+    const folder15 = path.join(classFolder, `${className}_15`);
+    const folder35 = path.join(classFolder, `${className}_35`);
+    const folder50 = path.join(classFolder, `${className}_50`);
+    
+    await fs.ensureDir(path.join(folder15, 'images'));
+    await fs.ensureDir(path.join(folder15, 'labels'));
+    await fs.ensureDir(path.join(folder35, 'images'));
+    await fs.ensureDir(path.join(folder35, 'labels'));
+    await fs.ensureDir(path.join(folder50, 'images'));
+    await fs.ensureDir(path.join(folder50, 'labels'));
+    
+    console.log('Subfolders created:', {
+      folder15,
+      folder35,
+      folder50
+    });
+    
+    // Get all image files from source
+    const files = await fs.readdir(sourceDir);
+    const imageFiles = files.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+    
+    // Calculate distribution
+    // For admin mode (100 images): 15, 35, 50
+    // For normal mode (1000 images): 150, 350, 500
+    const count15 = Math.floor(totalCount * 0.15);
+    const count35 = Math.floor(totalCount * 0.35);
+    const count50 = totalCount - count15 - count35;
+    
+    // Shuffle and distribute
+    const shuffled = imageFiles.sort(() => Math.random() - 0.5);
+    
+    // Copy to folder15 (first 15%)
+    for (let i = 0; i < count15 && i < shuffled.length; i++) {
+      const src = path.join(sourceDir, shuffled[i]);
+      const dest = path.join(folder15, 'images', shuffled[i]);
+      await fs.copy(src, dest);
+    }
+    
+    // Copy to folder35 (next 35%)
+    for (let i = count15; i < count15 + count35 && i < shuffled.length; i++) {
+      const src = path.join(sourceDir, shuffled[i]);
+      const dest = path.join(folder35, 'images', shuffled[i]);
+      await fs.copy(src, dest);
+    }
+    
+    // Copy to folder50 (remaining 50%)
+    for (let i = count15 + count35; i < shuffled.length; i++) {
+      const src = path.join(sourceDir, shuffled[i]);
+      const dest = path.join(folder50, 'images', shuffled[i]);
+      await fs.copy(src, dest);
+    }
+    
+    // Clean up temp folder
+    await fs.remove(sourceDir);
+    
+    return {
+      success: true,
+      basePath: classFolder,
+      counts: {
+        folder15: count15,
+        folder35: count35,
+        folder50: count50
+      }
+    };
+  } catch (error) {
+    console.error('Error distributing images:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('file-exists', async (event, filePath) => {
+  try {
+    return await fs.pathExists(filePath);
+  } catch (e) {
+    return false;
+  }
+});
+
 ipcMain.handle('get-images-list', async (event, datasetPath) => {
   try {
     const imagesPath = path.join(datasetPath, 'images');
@@ -198,14 +311,6 @@ ipcMain.handle('export-model', async (event, { modelPath, outputPath }) => {
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
-  }
-});
-
-ipcMain.handle('file-exists', async (event, filePath) => {
-  try {
-    return await fs.pathExists(filePath);
-  } catch (e) {
-    return false;
   }
 });
 
