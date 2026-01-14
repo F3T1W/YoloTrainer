@@ -98,29 +98,50 @@
             padding: 2rem;
             display: flex; /* Enable flex for centering page containers */
             flex-direction: column;
+            position: relative;
         }
 
         /* Page Container - Full height and centered content */
         .page-container {
             display: none !important; /* Hidden by default */
-            flex: 1; /* Take all available space */
+            flex: 1 1 auto; /* Take all available space */
             flex-direction: column;
             width: 100%;
-            height: 100%; /* Ensure it fills the main-content */
+            min-height: calc(100vh - 4rem); /* Ensure it fills the main-content minus padding */
             animation: fadeIn 0.4s ease-in-out;
+        }
+
+        /* Ensure active pages are visible */
+        .page-container.active .content-wrapper {
+            min-height: 500px; /* Minimum height to ensure content is visible */
         }
 
         .page-container.active {
             display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
 
         /* Helper for vertical centering content inside page */
         .content-wrapper {
-            flex: 1;
+            flex: 1 1 auto;
             display: flex;
             flex-direction: column;
-            justify-content: center; /* Vertical center */
             width: 100%;
+            min-height: 0; /* Allow flex shrinking */
+            overflow-y: visible; /* Show content */
+            position: relative;
+            visibility: visible;
+        }
+
+        /* Centered content wrapper for specific pages */
+        .content-wrapper.centered {
+            justify-content: center; /* Vertical center */
+        }
+
+        /* For pages that should fill height without centering */
+        .content-wrapper:not(.centered) {
+            justify-content: flex-start; /* Start from top */
         }
 
         @keyframes fadeIn {
@@ -178,6 +199,26 @@
         .form-floating > .form-control:focus ~ label::after,
         .form-floating > .form-control:not(:placeholder-shown) ~ label::after {
             background-color: transparent !important; 
+        }
+
+        /* Fix for empty space at top of form-select in form-floating */
+        .form-floating > .form-select {
+            padding-top: 0.625rem !important;
+            padding-bottom: 0.625rem !important;
+        }
+
+        /* Remove white space - fix label padding for select */
+        .form-floating > .form-select ~ label {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            height: auto !important;
+            top: 50% !important;
+            transform: translateY(-50%) scale(0.85) translateX(0.15rem) !important;
+        }
+
+        .form-floating > .form-select:focus ~ label,
+        .form-floating > .form-select:not([value=""]) ~ label {
+            transform: scale(0.85) translateY(-0.5rem) translateX(0.15rem) !important;
         }
 
         .btn-primary {
@@ -276,6 +317,501 @@
             overflow-y: auto;
             border: 1px solid #333;
         }
+
+        /* Theme Cards */
+        .theme-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            text-align: center;
+        }
+
+        .theme-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+        }
+
+        .theme-card.active {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 15px rgba(220, 53, 69, 0.5);
+        }
+
+        .theme-preview {
+            width: 100%;
+            height: 80px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .theme-preview::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 30%;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .theme-preview::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 10%;
+            right: 10%;
+            height: 40%;
+            border-radius: 4px;
+        }
+
+        /* Theme Previews */
+        .dark-theme-preview { background: linear-gradient(135deg, #121212 0%, #1e1e1e 100%); }
+        .dark-theme-preview::before { background: #0f0f0f; }
+        .dark-theme-preview::after { background: #dc3545; }
+
+        .light-theme-preview { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); }
+        .light-theme-preview::before { background: #ffffff; }
+        .light-theme-preview::after { background: #0d6efd; }
+
+        .blue-theme-preview { background: linear-gradient(135deg, #0a1929 0%, #132f4c 100%); }
+        .blue-theme-preview::before { background: #071a2e; }
+        .blue-theme-preview::after { background: #1976d2; }
+
+        .green-theme-preview { background: linear-gradient(135deg, #1a1f1a 0%, #2d3e2d 100%); }
+        .green-theme-preview::before { background: #0f150f; }
+        .green-theme-preview::after { background: #2e7d32; }
+
+        .purple-theme-preview { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d4e 100%); }
+        .purple-theme-preview::before { background: #0f0f1e; }
+        .purple-theme-preview::after { background: #7b2cbf; }
+
+        .cyan-theme-preview { background: linear-gradient(135deg, #0a1a1f 0%, #1a2d33 100%); }
+        .cyan-theme-preview::before { background: #050f12; }
+        .cyan-theme-preview::after { background: #06b6d4; }
+
+        .pink-theme-preview { background: linear-gradient(135deg, #2e1a1f 0%, #4d2d33 100%); }
+        .pink-theme-preview::before { background: #1f0f12; }
+        .pink-theme-preview::after { background: #ec4899; }
+
+        .indigo-theme-preview { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d4d 100%); }
+        .indigo-theme-preview::before { background: #0f0f1e; }
+        .indigo-theme-preview::after { background: #6366f1; }
+
+        .amber-theme-preview { background: linear-gradient(135deg, #2e1f0a 0%, #4d331a 100%); }
+        .amber-theme-preview::before { background: #1f1205; }
+        .amber-theme-preview::after { background: #f59e0b; }
+
+        /* Theme Variables */
+        body[data-theme="light"] {
+            --dark-bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #212529;
+            --sidebar-bg: #e9ecef;
+            --primary-color: #0d6efd;
+        }
+
+        body[data-theme="light"] .card {
+            border-color: #dee2e6;
+        }
+
+        body[data-theme="light"] .form-control,
+        body[data-theme="light"] .form-select {
+            background-color: #ffffff;
+            border-color: #ced4da;
+            color: #212529;
+        }
+
+        body[data-theme="light"] .form-control:focus,
+        body[data-theme="light"] .form-select:focus {
+            background-color: #ffffff;
+            border-color: var(--primary-color);
+            color: #212529;
+        }
+
+        body[data-theme="light"] .nav-link {
+            color: #495057;
+        }
+
+        body[data-theme="light"] .nav-link:hover {
+            color: #000;
+        }
+
+        body[data-theme="light"] .sidebar {
+            border-right-color: #dee2e6;
+        }
+
+        body[data-theme="light"] .theme-name {
+            color: #212529 !important;
+        }
+
+        /* Light theme text colors */
+        body[data-theme="light"] {
+            color: #212529;
+        }
+
+        body[data-theme="light"] h1,
+        body[data-theme="light"] h2,
+        body[data-theme="light"] h3,
+        body[data-theme="light"] h4,
+        body[data-theme="light"] h5,
+        body[data-theme="light"] h6 {
+            color: #212529 !important;
+        }
+
+        body[data-theme="light"] .text-white {
+            color: #212529 !important;
+        }
+
+        body[data-theme="light"] .card-header,
+        body[data-theme="light"] .card-body {
+            color: #212529;
+        }
+
+        body[data-theme="light"] .card-header h3,
+        body[data-theme="light"] .card-header h4,
+        body[data-theme="light"] .card-header h5 {
+            color: #212529 !important;
+        }
+
+        body[data-theme="light"] .form-floating label {
+            color: #495057 !important;
+        }
+
+        body[data-theme="light"] .form-floating > .form-control:focus ~ label,
+        body[data-theme="light"] .form-floating > .form-control:not(:placeholder-shown) ~ label,
+        body[data-theme="light"] .form-floating > .form-select ~ label {
+            color: #495057 !important;
+        }
+
+        body[data-theme="light"] .badge {
+            color: #fff;
+        }
+
+        body[data-theme="light"] .btn-outline-light {
+            color: #212529;
+            border-color: #dee2e6;
+        }
+
+        body[data-theme="light"] .btn-outline-light:hover {
+            background-color: #f8f9fa;
+            border-color: #dee2e6;
+            color: #212529;
+        }
+
+        body[data-theme="light"] .stat-number {
+            color: var(--primary-color) !important;
+        }
+
+        body[data-theme="light"] .stat-card .text-white {
+            color: #212529 !important;
+        }
+
+        body[data-theme="light"] .sidebar-header h5,
+        body[data-theme="light"] .sidebar-header small {
+            color: #212529;
+        }
+
+        body[data-theme="light"] .input-group-text {
+            background-color: #e9ecef;
+            color: #212529;
+            border-color: #ced4da;
+        }
+
+        body[data-theme="light"] .progress {
+            background-color: #e9ecef;
+        }
+
+        body[data-theme="light"] #placeholder-text {
+            color: #fff !important;
+        }
+
+        /* Make annotation placeholder more visible */
+        #placeholder-text {
+            color: #fff !important;
+            font-size: 1.25rem !important;
+            font-weight: 500 !important;
+            opacity: 1 !important;
+        }
+
+        body[data-theme="light"] .text-muted {
+            color: #6c757d !important;
+        }
+
+        body[data-theme="light"] .text-success {
+            color: #198754 !important;
+        }
+
+        body[data-theme="light"] .text-danger {
+            color: #dc3545 !important;
+        }
+
+        body[data-theme="light"] .small,
+        body[data-theme="light"] small {
+            color: #495057 !important;
+        }
+
+        body[data-theme="light"] .lead {
+            color: #212529 !important;
+        }
+
+        body[data-theme="light"] .opacity-75,
+        body[data-theme="light"] .opacity-50 {
+            color: #495057 !important;
+            opacity: 1 !important;
+        }
+
+        body[data-theme="light"] .btn-dark {
+            background-color: #343a40;
+            border-color: #343a40;
+            color: #fff;
+        }
+
+        body[data-theme="light"] .btn-dark:hover {
+            background-color: #23272b;
+            border-color: #1d2124;
+        }
+
+        body[data-theme="light"] .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: #fff;
+        }
+
+        body[data-theme="light"] .btn-secondary:hover {
+            background-color: #5c636a;
+            border-color: #565e64;
+        }
+
+        body[data-theme="light"] .btn-outline-danger {
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        body[data-theme="light"] .btn-outline-danger:hover {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: #fff;
+        }
+
+        body[data-theme="light"] .btn-outline-warning {
+            color: #ffc107;
+            border-color: #ffc107;
+        }
+
+        body[data-theme="light"] .btn-outline-warning:hover {
+            background-color: #ffc107;
+            border-color: #ffc107;
+            color: #000;
+        }
+
+        body[data-theme="light"] .btn-outline-success {
+            color: #198754;
+            border-color: #198754;
+        }
+
+        body[data-theme="light"] .btn-outline-success:hover {
+            background-color: #198754;
+            border-color: #198754;
+            color: #fff;
+        }
+
+        body[data-theme="light"] .btn-outline-info {
+            color: #0dcaf0;
+            border-color: #0dcaf0;
+        }
+
+        body[data-theme="light"] .btn-outline-info:hover {
+            background-color: #0dcaf0;
+            border-color: #0dcaf0;
+            color: #000;
+        }
+
+        body[data-theme="light"] .badge.bg-danger,
+        body[data-theme="light"] .badge.bg-secondary {
+            color: #fff;
+        }
+
+        body[data-theme="light"] .badge.text-bg-dark {
+            background-color: #212529 !important;
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .badge.text-bg-danger {
+            background-color: #dc3545 !important;
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .card-header.bg-transparent {
+            color: #212529;
+        }
+
+        body[data-theme="light"] .card-footer {
+            color: #212529;
+        }
+
+        body[data-theme="light"] .form-text {
+            color: #6c757d !important;
+        }
+
+        body[data-theme="light"] .terminal-log {
+            background-color: #000;
+            color: #0f0;
+        }
+
+        body[data-theme="light"] .terminal-log .text-success {
+            color: #0f0 !important;
+        }
+
+        body[data-theme="light"] .bg-dark {
+            background-color: #343a40 !important;
+        }
+
+        body[data-theme="light"] .bg-dark .text-white {
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .bg-black {
+            background-color: #000 !important;
+        }
+
+        body[data-theme="light"] .bg-black .text-white,
+        body[data-theme="light"] .bg-black .text-muted {
+            color: #fff !important;
+        }
+
+        /* Make test result placeholder more visible */
+        #test-result-placeholder {
+            color: #fff !important;
+            font-size: 1.25rem !important;
+            font-weight: 500 !important;
+            opacity: 1 !important;
+        }
+
+        body[data-theme="light"] #test-result-placeholder {
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .input-group-text.bg-dark {
+            background-color: #343a40 !important;
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .form-control.bg-dark,
+        body[data-theme="light"] .form-select.bg-dark {
+            background-color: #343a40 !important;
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .border-secondary {
+            border-color: #6c757d !important;
+        }
+
+        body[data-theme="light"] .card.bg-dark {
+            background-color: #343a40 !important;
+        }
+
+        body[data-theme="light"] .card.bg-dark .text-white {
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .card.bg-dark .stat-number {
+            color: var(--primary-color) !important;
+        }
+
+        body[data-theme="light"] .card-header.bg-black {
+            background-color: #000 !important;
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .card-header.bg-black .text-white {
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .card-body.bg-black {
+            background-color: #000 !important;
+        }
+
+        body[data-theme="light"] p.text-white,
+        body[data-theme="light"] span.text-white,
+        body[data-theme="light"] div.text-white {
+            color: #212529 !important;
+        }
+
+        body[data-theme="light"] .form-label.text-white {
+            color: #212529 !important;
+        }
+
+        body[data-theme="light"] .sidebar-header small.text-white {
+            color: #212529 !important;
+        }
+
+        /* Download log colors */
+        #download-log {
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] #download-log {
+            color: #000 !important;
+        }
+
+        body[data-theme="blue"] {
+            --dark-bg: #0a1929;
+            --card-bg: #132f4c;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #071a2e;
+            --primary-color: #1976d2;
+        }
+
+        body[data-theme="green"] {
+            --dark-bg: #1a1f1a;
+            --card-bg: #2d3e2d;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #0f150f;
+            --primary-color: #2e7d32;
+        }
+
+        body[data-theme="purple"] {
+            --dark-bg: #1a1a2e;
+            --card-bg: #2d2d4e;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #0f0f1e;
+            --primary-color: #7b2cbf;
+        }
+
+        body[data-theme="cyan"] {
+            --dark-bg: #0a1a1f;
+            --card-bg: #1a2d33;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #050f12;
+            --primary-color: #06b6d4;
+        }
+
+        body[data-theme="pink"] {
+            --dark-bg: #2e1a1f;
+            --card-bg: #4d2d33;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #1f0f12;
+            --primary-color: #ec4899;
+        }
+
+        body[data-theme="indigo"] {
+            --dark-bg: #1a1a2e;
+            --card-bg: #2d2d4d;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #0f0f1e;
+            --primary-color: #6366f1;
+        }
+
+        body[data-theme="amber"] {
+            --dark-bg: #2e1f0a;
+            --card-bg: #4d331a;
+            --text-color: #e0e0e0;
+            --sidebar-bg: #1f1205;
+            --primary-color: #f59e0b;
+        }
     </style>
 </head>
 <body>
@@ -291,27 +827,25 @@
         </div>
         <nav class="nav flex-column mt-3">
             <a class="nav-link active" onclick="showPage('home')">
-                <i class="bi bi-house-door"></i> Home
+                <i class="bi bi-house-door"></i> <span data-i18n="nav-home">Home</span>
             </a>
             <a class="nav-link" onclick="showPage('download')">
-                <i class="bi bi-cloud-arrow-down"></i> Download Images
-                <div id="status-download" class="status-indicator status-pending"></div>
+                <i class="bi bi-cloud-arrow-down"></i> <span data-i18n="nav-download">Download Images</span>
             </a>
             <a class="nav-link" onclick="showPage('classes')">
-                <i class="bi bi-tags"></i> Define Classes
-                <div id="status-classes" class="status-indicator status-pending"></div>
+                <i class="bi bi-tags"></i> <span data-i18n="nav-classes">Define Classes</span>
             </a>
             <a class="nav-link" onclick="showPage('annotate')">
-                <i class="bi bi-bounding-box"></i> Annotate Dataset
-                <div id="status-annotate" class="status-indicator status-pending"></div>
+                <i class="bi bi-bounding-box"></i> <span data-i18n="nav-annotate">Annotate Dataset</span>
             </a>
             <a class="nav-link" onclick="showPage('train')">
-                <i class="bi bi-cpu"></i> Train Model
-                <div id="status-train" class="status-indicator status-pending"></div>
+                <i class="bi bi-cpu"></i> <span data-i18n="nav-train">Train Model</span>
             </a>
             <a class="nav-link" onclick="showPage('test')">
-                <i class="bi bi-crosshair"></i> Test Model
-                <div id="status-test" class="status-indicator status-pending"></div>
+                <i class="bi bi-crosshair"></i> <span data-i18n="nav-test">Test Model</span>
+            </a>
+            <a class="nav-link" onclick="showPage('settings')">
+                <i class="bi bi-gear"></i> <span data-i18n="nav-settings">Settings</span>
             </a>
         </nav>
     </div>
@@ -327,8 +861,8 @@
                     <div class="col-lg-8 d-flex flex-column">
                         <div class="card h-100 border-0 bg-transparent shadow-none">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <h1 class="display-3 fw-bold mb-4">Welcome to <span class="text-danger">YOLO</span> Trainer</h1>
-                                <p class="lead text-white mb-5">
+                                <h1 class="display-3 fw-bold mb-4"><span data-i18n="home-welcome">Welcome to</span> <span class="text-danger">YOLO</span> Trainer</h1>
+                                <p class="lead text-white mb-5" data-i18n="home-subtitle">
                                     Create custom object detection models with an intuitive, end-to-end workflow. 
                                     Download data, annotate images, and train your model all in one place.
                                 </p>
@@ -338,7 +872,7 @@
                                         <div class="card bg-dark h-100">
                                             <div class="card-body stat-card">
                                                 <div id="stat-datasets" class="stat-number">0</div>
-                                                <div class="text-white fs-5">Datasets</div>
+                                                <div class="text-white fs-5" data-i18n="home-stats-datasets">Datasets</div>
                                             </div>
                                         </div>
                                     </div>
@@ -346,7 +880,7 @@
                                         <div class="card bg-dark h-100">
                                             <div class="card-body stat-card">
                                                 <div id="stat-images" class="stat-number">0</div>
-                                                <div class="text-white fs-5">Images</div>
+                                                <div class="text-white fs-5" data-i18n="home-stats-images">Images</div>
                                             </div>
                                         </div>
                                     </div>
@@ -354,7 +888,7 @@
                                         <div class="card bg-dark h-100">
                                             <div class="card-body stat-card">
                                                 <div id="stat-models" class="stat-number">0</div>
-                                                <div class="text-white fs-5">Models</div>
+                                                <div class="text-white fs-5" data-i18n="home-stats-models">Models</div>
                                             </div>
                                         </div>
                                     </div>
@@ -367,21 +901,21 @@
                     <div class="col-lg-4">
                         <div class="card h-100">
                             <div class="card-header bg-transparent text-center">
-                                <h4 class="mb-0"><i class="bi bi-rocket-takeoff me-2"></i>Quick Start</h4>
+                                <h4 class="mb-0"><i class="bi bi-rocket-takeoff me-2"></i><span data-i18n="home-quick-start">Quick Start</span></h4>
                             </div>
                             <div class="card-body d-flex flex-column justify-content-around">
                                 <div class="text-center p-3">
                                     <i class="bi bi-reddit fs-1 text-danger mb-3"></i>
-                                    <h5>1. Download</h5>
-                                    <p class="text-white small">Get images from subreddits</p>
-                                    <button class="btn btn-outline-danger w-100" onclick="showPage('download')">Go to Download</button>
+                                    <h5 data-i18n="home-download-title">1. Download</h5>
+                                    <p class="text-white small" data-i18n="home-download-desc">Get images from subreddits</p>
+                                    <button class="btn btn-outline-danger w-100" onclick="showPage('download')" data-i18n="home-download-btn">Go to Download</button>
                                 </div>
                                 <hr class="border-secondary">
                                 <div class="text-center p-3">
                                     <i class="bi bi-pencil-square fs-1 text-warning mb-3"></i>
-                                    <h5>2. Annotate</h5>
-                                    <p class="text-white small">Label your dataset</p>
-                                    <button class="btn btn-outline-warning w-100" onclick="showPage('annotate')">Start Annotating</button>
+                                    <h5 data-i18n="home-annotate-title">2. Annotate</h5>
+                                    <p class="text-white small" data-i18n="home-annotate-desc">Label your dataset</p>
+                                    <button class="btn btn-outline-warning w-100" onclick="showPage('annotate')" data-i18n="home-annotate-btn">Start Annotating</button>
                                 </div>
                             </div>
                         </div>
@@ -392,41 +926,41 @@
 
         <!-- Download Page -->
         <div id="page-download" class="page-container">
-            <div class="content-wrapper">
+            <div class="content-wrapper centered">
                 <div class="row justify-content-center w-100">
                     <div class="col-xl-8 col-lg-10">
                         <div class="card shadow-lg">
                             <div class="card-header text-center py-3">
-                                <h3 class="mb-0 text-white"><i class="bi bi-cloud-download me-2"></i>Download Images from Reddit</h3>
+                                <h3 class="mb-0 text-white"><i class="bi bi-cloud-download me-2"></i><span data-i18n="download-title">Download Images from Reddit</span></h3>
                             </div>
                             <div class="card-body p-5">
                                 <form id="download-form" class="needs-validation" novalidate>
                                     <div class="row g-4">
                                         <div class="col-md-6">
                                             <div class="form-floating">
-                                                <input type="text" class="form-control text-white" id="subreddit-input" placeholder="subreddit" required>
-                                                <label for="subreddit-input">Subreddit Name (e.g. HairyArmpits)</label>
+                                                <input type="text" class="form-control text-white" id="subreddit-input" data-i18n-placeholder="download-subreddit" placeholder="subreddit" required>
+                                                <label for="subreddit-input" data-i18n="download-subreddit">Subreddit Name</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-floating">
-                                                <input type="text" class="form-control text-white" id="class-name-input" placeholder="class" required>
-                                                <label for="class-name-input">Class Name</label>
+                                                <input type="text" class="form-control text-white" id="class-name-input" data-i18n-placeholder="download-class" placeholder="class" required>
+                                                <label for="class-name-input" data-i18n="download-class">Class Name</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-floating">
-                                                <input type="number" class="form-control text-white" id="image-limit" value="500" min="1" max="10000" placeholder="Limit">
-                                                <label for="image-limit">Image Limit</label>
+                                                <input type="number" class="form-control text-white" id="image-limit" value="500" min="1" max="10000" data-i18n-placeholder="download-limit" placeholder="Limit">
+                                                <label for="image-limit" data-i18n="download-limit">Image Limit</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="input-group h-100">
                                                 <div class="form-floating flex-grow-1">
-                                                    <input type="text" class="form-control text-white" id="download-path" placeholder="Path">
-                                                    <label for="download-path">Download Path</label>
+                                                    <input type="text" class="form-control text-white" id="download-path" data-i18n-placeholder="download-path" placeholder="Path">
+                                                    <label for="download-path" data-i18n="download-path">Download Path</label>
                                                 </div>
-                                                <button class="btn btn-secondary px-4" type="button" id="btn-browse-download" onclick="handleSelectDownloadPath()">
+                                                <button class="btn btn-secondary px-4" type="button" id="btn-browse-download" onclick="handleSelectDownloadPath()" data-i18n="download-browse" title="Browse">
                                                     <i class="bi bi-folder2-open"></i>
                                                 </button>
                                             </div>
@@ -436,22 +970,22 @@
                                         <div class="col-12 mt-4">
                                             <div id="download-progress-container" style="display: none;">
                                                 <label class="form-label d-flex justify-content-between">
-                                                    <span>Downloading...</span>
+                                                    <span data-i18n="download-downloading">Downloading...</span>
                                                     <span id="download-status-text">0%</span>
                                                 </label>
                                                 <div class="progress bg-dark" style="height: 10px;">
                                                     <div id="download-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 0%"></div>
                                                 </div>
-                                                <div id="download-log" class="small text-muted mt-2 font-monospace" style="max-height: 100px; overflow-y: auto; color: #fff !important;"></div>
+                                                <div id="download-log" class="small text-muted mt-2 font-monospace" style="max-height: 100px; overflow-y: auto;"></div>
                     </div>
                 </div>
 
                                         <div class="col-12 d-flex gap-3 mt-4">
                                             <button type="button" id="btn-start-download" class="btn btn-danger btn-lg flex-grow-1" onclick="handleDownload(event)">
-                                                <i class="bi bi-download me-2"></i>Start Download
+                                                <i class="bi bi-download me-2"></i><span data-i18n="download-start">Start Download</span>
                                             </button>
                                             <button type="button" class="btn btn-outline-light btn-lg" onclick="showPage('classes')">
-                                                Continue <i class="bi bi-arrow-right ms-2"></i>
+                                                <span data-i18n="download-continue">Continue</span> <i class="bi bi-arrow-right ms-2"></i>
                                             </button>
                                         </div>
                                     </div>
@@ -465,79 +999,70 @@
 
         <!-- Classes Page -->
         <div id="page-classes" class="page-container">
-            <div class="content-wrapper">
+            <div class="content-wrapper centered">
                 <div class="row g-4 h-100">
-                    <!-- Left: Add New Class -->
-                    <div class="col-lg-5 d-flex flex-column">
-                        <div class="card flex-grow-1">
-                            <div class="card-header">
-                                <h4 class="mb-0 text-white"><i class="bi bi-plus-circle me-2"></i>Add New Class</h4>
-                            </div>
-                            <div class="card-body d-flex flex-column justify-content-center">
-                                <div class="mb-4">
-                                    <div class="input-group input-group-lg">
-                                        <div class="form-floating flex-grow-1">
-                                            <input type="text" id="new-class-input" class="form-control" placeholder="e.g. Cat">
-                                            <label for="new-class-input">Class Name (e.g. Cat)</label>
-                                        </div>
-                                        <button class="btn btn-danger" type="button" id="btn-add-class" onclick="addClass()">
-                                            Add Class
-                                        </button>
-                                    </div>
-                                    <div class="form-text mt-2 text-white opacity-75">Classes define what objects your model will learn to detect.</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right: Current Classes List -->
-                    <div class="col-lg-7 d-flex flex-column">
-                        <div class="card flex-grow-1">
+                    <!-- Managed Classes - Full Width -->
+                    <div class="col-lg-12 d-flex flex-column">
+                        <div class="card flex-grow-1 d-flex flex-column">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <h4 class="mb-0 text-white"><i class="bi bi-list-check me-2"></i>Managed Classes</h4>
-                                <span class="badge bg-secondary" id="class-count">0</span>
+                                <h4 class="mb-0 text-white"><i class="bi bi-list-check me-2"></i><span data-i18n="classes-managed">Managed Classes</span></h4>
                             </div>
-                    <div class="card-body">
+                            <div class="card-body flex-grow-1">
                                 <div id="classesList" class="d-flex flex-wrap gap-2 align-content-start h-100">
                                     <!-- Class items will be injected here -->
-                                    <div class="text-white w-100 text-center mt-5 opacity-75">No classes defined yet. Add one to get started.</div>
+                                    <div class="text-white w-100 text-center mt-5 opacity-75" data-i18n="classes-empty">No classes defined yet. Add one to get started.</div>
                                 </div>
                             </div>
-                            <div class="card-footer bg-transparent border-top-0 pb-3 text-end">
+                            <div class="card-footer bg-transparent border-top-0 pb-3 d-flex justify-content-between align-items-center">
+                                <!-- InputGroup in bottom left corner -->
+                                <div class="input-group input-group-lg" style="max-width: 500px;">
+                                    <div class="form-floating flex-grow-1">
+                                        <input type="text" id="new-class-input" class="form-control" data-i18n-placeholder="classes-input-placeholder" placeholder="Class Name">
+                                        <label for="new-class-input" data-i18n="classes-input-placeholder">Class Name</label>
+                                    </div>
+                                    <button class="btn btn-danger" type="button" id="btn-add-class" onclick="addClass()" data-i18n="classes-add">
+                                        Add Class
+                                    </button>
+                                </div>
                                 <button class="btn btn-outline-light btn-lg" onclick="showPage('annotate')">
-                                    Continue to Annotation <i class="bi bi-arrow-right ms-2"></i>
+                                    <span data-i18n="classes-continue">Continue to Annotation</span> <i class="bi bi-arrow-right ms-2"></i>
                                 </button>
                             </div>
-                        </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
         <!-- Annotate Page -->
         <div id="page-annotate" class="page-container">
+            <div class="content-wrapper" style="height: 100%;">
             <!-- Top Controls -->
             <div class="card mb-3 w-100 flex-shrink-0">
                 <div class="card-body py-2">
                     <div class="row align-items-center g-2">
                         <div class="col-md-3">
-                            <button class="btn btn-secondary w-100 btn-sm" id="btn-load-dataset" onclick="handleLoadDataset()">
+                            <button class="btn btn-secondary w-100 btn-sm" id="btn-load-dataset" onclick="handleLoadDataset()" data-i18n="annotate-load">
                                 <i class="bi bi-folder2-open me-1"></i>Load Dataset
                             </button>
                         </div>
                         <div class="col-md-3">
                             <select class="form-select form-select-sm" id="annotation-class-select">
-                                <option selected disabled>Select Class...</option>
+                                <option selected disabled data-i18n="annotate-select-class">Select Class...</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                             <button class="btn btn-outline-warning w-100 btn-sm" id="btn-auto-label" onclick="handleAutoLabel()" title="Auto-label using trained model">
-                                <i class="bi bi-magic me-1"></i>Auto-Label
-                            </button>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-dark text-white border-secondary" title="Confidence Threshold" data-i18n="annotate-conf">Conf</span>
+                                <input type="number" class="form-control bg-dark text-white border-secondary" id="auto-label-conf" value="0.25" min="0.01" max="1.0" step="0.01">
+                                <button class="btn btn-outline-warning" id="btn-auto-label" onclick="toggleAutoLabel()" title="Toggle auto-labeling">
+                                    <i class="bi bi-magic"></i> <span data-i18n="annotate-auto">Auto</span>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-3 text-end">
                              <span class="text-white small me-2" id="image-counter">0 / 0</span>
-                             <span class="badge bg-danger text-truncate" style="max-width: 80px;" id="current-file-name">No file</span>
+                             <span class="badge bg-danger text-truncate" style="max-width: 80px;" id="current-file-name" data-i18n="annotate-no-file">No file</span>
                         </div>
                     </div>
                 </div>
@@ -546,7 +1071,7 @@
             <!-- Main Canvas Area (Fills space) -->
             <div id="annotation-container">
                 <canvas id="annotation-canvas"></canvas>
-                <div class="text-white opacity-75 text-center" id="placeholder-text" style="position: absolute; pointer-events: none;">
+                <div class="text-white text-center" id="placeholder-text" style="position: absolute; pointer-events: none; font-size: 1.25rem; font-weight: 500; opacity: 1;" data-i18n="annotate-placeholder">
                     <i class="bi bi-image fs-1 d-block mb-3"></i>
                     Load a dataset to start annotating
                 </div>
@@ -574,23 +1099,24 @@
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <button class="btn btn-dark" id="btn-undo" onclick="undoAnnotation()" title="Undo last (Ctrl+Z)">
+                            <button class="btn btn-dark" id="btn-undo" onclick="undoAnnotation()" title="Undo last (Ctrl+Z)" data-i18n="annotate-undo">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
                             </button>
-                            <button class="btn btn-dark ms-2" id="btn-clear-annotations" onclick="clearAnnotations()">
+                            <button class="btn btn-dark ms-2" id="btn-clear-annotations" onclick="clearAnnotations()" data-i18n="annotate-reset">
                                 <i class="bi bi-trash me-1"></i>Reset
                             </button>
                         </div>
                         
                         <div class="d-flex gap-2">
-                            <button class="btn btn-outline-success ms-3" onclick="showPage('train')" id="btn-finish-train">
+                            <button class="btn btn-outline-success ms-3" onclick="showPage('train')" id="btn-finish-train" data-i18n="annotate-finish">
                                 Finish & Train <i class="bi bi-check-lg ms-1"></i>
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
-                            </div>
+            </div>
+        </div>
 
         <!-- Train Page -->
         <div id="page-train" class="page-container">
@@ -600,34 +1126,34 @@
                     <div class="col-lg-12 flex-shrink-0">
                         <div class="card">
                             <div class="card-header">
-                                <h4 class="mb-0 text-white"><i class="bi bi-sliders me-2"></i>Training Configuration</h4>
+                                <h4 class="mb-0 text-white"><i class="bi bi-sliders me-2"></i><span data-i18n="train-config">Training Configuration</span></h4>
                             </div>
                             <div class="card-body">
                                 <form id="train-form" class="row g-3">
                                     <div class="col-md-6">
-                                        <label class="form-label text-white">Dataset Path</label>
+                                        <label class="form-label text-white" data-i18n="train-dataset-path">Dataset Path</label>
                                         <div class="input-group">
                                             <input type="text" class="form-control" id="train-dataset-path" readonly>
-                                            <button class="btn btn-secondary" type="button" id="btn-select-train-dataset">
+                                            <button class="btn btn-secondary" type="button" id="btn-select-train-dataset" data-i18n="train-select">
                                                 Select
                                             </button>
                                         </div>
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label text-white">Epochs</label>
+                                        <label class="form-label text-white" data-i18n="train-epochs">Epochs</label>
                                         <input type="number" class="form-control" id="epochs" value="50">
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label text-white">Batch Size</label>
+                                        <label class="form-label text-white" data-i18n="train-batch-size">Batch Size</label>
                                         <input type="number" class="form-control" id="batch-size" value="16">
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label text-white">Image Size</label>
+                                        <label class="form-label text-white" data-i18n="train-image-size">Image Size</label>
                                         <input type="number" class="form-control" id="img-size" value="640">
                                     </div>
                                     <div class="col-12 mt-3 text-center">
                                         <button type="button" id="btn-start-training" class="btn btn-danger btn-lg px-5">
-                                            <i class="bi bi-play-circle-fill me-2"></i> Start Training
+                                            <i class="bi bi-play-circle-fill me-2"></i> <span data-i18n="train-start">Start Training</span>
                                         </button>
                                     </div>
                                 </form>
@@ -639,12 +1165,12 @@
                     <div class="col-lg-12 flex-grow-1" style="min-height: 0; height: 400px;">
                         <div class="card h-100 d-flex flex-column">
                             <div class="card-header bg-black text-white border-bottom border-dark d-flex justify-content-between align-items-center">
-                                <span><i class="bi bi-terminal me-2"></i>Training Log</span>
-                                <span class="badge bg-secondary" id="training-status-badge">Idle</span>
+                                <span><i class="bi bi-terminal me-2"></i><span data-i18n="train-log">Training Log</span></span>
+                                <span class="badge bg-secondary" id="training-status-badge" data-i18n="train-status-idle">Idle</span>
                             </div>
                             <div class="card-body p-0 flex-grow-1" style="background-color: #000; overflow: hidden;">
                                 <div id="training-log" class="terminal-log" style="height: 100%; overflow-y: auto;">
-                                    <div class="text-success">> Ready to initialize training sequence...</div>
+                                    <div class="text-success" data-i18n="train-ready">> Ready to initialize training sequence...</div>
                                 </div>
                             </div>
                         </div>
@@ -655,49 +1181,49 @@
 
         <!-- Test Model Page -->
         <div id="page-test" class="page-container">
-            <div class="content-wrapper">
+            <div class="content-wrapper centered">
                 <div class="row h-100 g-4">
                     <div class="col-lg-12">
                          <div class="card h-100">
                              <div class="card-header text-center py-3">
-                                 <h3 class="mb-0 text-white"><i class="bi bi-crosshair me-2"></i>Test Model</h3>
+                                 <h3 class="mb-0 text-white"><i class="bi bi-crosshair me-2"></i><span data-i18n="test-title">Test Model</span></h3>
                              </div>
                              <div class="card-body p-4 d-flex flex-column">
                                  <form id="test-form" class="row g-3">
                                      <div class="col-md-6">
-                                         <label class="form-label text-white">Model Path</label>
+                                         <label class="form-label text-white" data-i18n="test-model-path">Model Path</label>
                                          <div class="input-group">
                                              <input type="text" class="form-control" id="test-model-path" readonly value="models/custom_model/weights/best.pt">
-                                             <button class="btn btn-secondary" type="button" onclick="selectModelFile()">Select .pt</button>
-                                             <button class="btn btn-outline-info" type="button" onclick="useBaseModel()" title="Use standard YOLOv8n (detects 80 common classes)">
+                                             <button class="btn btn-secondary" type="button" onclick="selectModelFile()" data-i18n="test-select-pt">Select .pt</button>
+                                             <button class="btn btn-outline-info" type="button" onclick="useBaseModel()" title="Use standard YOLOv8n (detects 80 common classes)" data-i18n="test-base">
                                                  <i class="bi bi-box-seam"></i> Base
                                              </button>
                                          </div>
                                      </div>
                                      <div class="col-md-6">
-                                         <label class="form-label text-white">Image to Test</label>
+                                         <label class="form-label text-white" data-i18n="test-image">Image to Test</label>
                                          <div class="input-group">
-                                             <input type="text" class="form-control" id="test-image-path" readonly placeholder="Select an image...">
-                                             <button class="btn btn-secondary" type="button" onclick="selectTestImage()">Select Image</button>
+                                             <input type="text" class="form-control" id="test-image-path" readonly data-i18n-placeholder="test-select-image" placeholder="Select an image...">
+                                             <button class="btn btn-secondary" type="button" onclick="selectTestImage()" data-i18n="test-select-image">Select Image</button>
                                          </div>
                                      </div>
                                      <div class="col-md-12">
                                          <label class="form-label text-white d-flex justify-content-between">
-                                             <span>Confidence Threshold</span>
+                                             <span data-i18n="test-confidence">Confidence Threshold</span>
                                              <span id="conf-value">0.25</span>
                                          </label>
                                          <input type="range" class="form-range" id="conf-threshold" min="0.01" max="1.0" step="0.01" value="0.25" oninput="document.getElementById('conf-value').innerText = this.value">
                                      </div>
                                      <div class="col-12 text-center mt-3">
                                          <button type="button" class="btn btn-primary px-5" onclick="runPrediction()">
-                                             <i class="bi bi-play-fill me-2"></i>Run Prediction
+                                             <i class="bi bi-play-fill me-2"></i><span data-i18n="test-run">Run Prediction</span>
                                          </button>
                                      </div>
                                  </form>
                                  
                                  <div class="flex-grow-1 mt-4 position-relative d-flex justify-content-center align-items-center bg-black border border-secondary rounded overflow-hidden" style="min-height: 400px;">
-                                     <div id="test-result-placeholder" class="text-muted">
-                                         <i class="bi bi-image fs-1 d-block text-center mb-2"></i>
+                                     <div id="test-result-placeholder" class="text-white text-center" data-i18n="test-placeholder" style="font-size: 1.25rem; font-weight: 500; opacity: 1;">
+                                         <i class="bi bi-image fs-1 d-block text-center text-white mb-3"></i>
                                          Result will appear here
                                      </div>
                                      <img id="test-result-image" src="" style="max-width: 100%; max-height: 100%; display: none; object-fit: contain;">
@@ -708,6 +1234,96 @@
                                  <div id="prediction-logs" class="mt-3 p-3 bg-black border border-secondary rounded font-monospace small" style="display: none; max-height: 150px; overflow-y: auto;"></div>
                              </div>
                          </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div id="page-settings" class="page-container">
+            <div class="content-wrapper centered">
+                <div class="row justify-content-center w-100 h-100">
+                    <div class="col-xl-8 col-lg-10">
+                        <div class="card shadow-lg">
+                            <div class="card-header text-center py-3">
+                                <h3 class="mb-0 text-white"><i class="bi bi-gear me-2"></i><span data-i18n="settings-title">Settings</span></h3>
+                            </div>
+                            <div class="card-body p-5">
+                                <!-- Language Selection -->
+                                <div class="mb-5">
+                                    <h5 class="text-white mb-3"><i class="bi bi-translate me-2"></i><span data-i18n="settings-language">Language</span></h5>
+                                    <div class="form-floating">
+                                        <select class="form-select" id="language-select" onchange="changeLanguage(this.value)">
+                                            <option value="en">English</option>
+                                            <option value="ru">Русский</option>
+                                            <option value="ja">日本語</option>
+                                            <option value="uz">O'zbek</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Theme Selection -->
+                                <div>
+                                    <h5 class="text-white mb-3"><i class="bi bi-palette me-2"></i><span data-i18n="settings-theme">Theme</span></h5>
+                                    <div class="row g-3">
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="dark" onclick="changeTheme('dark')">
+                                                <div class="theme-preview dark-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-dark">Dark</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="light" onclick="changeTheme('light')">
+                                                <div class="theme-preview light-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-light">Light</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="blue" onclick="changeTheme('blue')">
+                                                <div class="theme-preview blue-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-blue">Blue</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="green" onclick="changeTheme('green')">
+                                                <div class="theme-preview green-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-green">Green</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="purple" onclick="changeTheme('purple')">
+                                                <div class="theme-preview purple-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-purple">Purple</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="cyan" onclick="changeTheme('cyan')">
+                                                <div class="theme-preview cyan-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-cyan">Cyan</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="pink" onclick="changeTheme('pink')">
+                                                <div class="theme-preview pink-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-pink">Pink</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="indigo" onclick="changeTheme('indigo')">
+                                                <div class="theme-preview indigo-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-indigo">Indigo</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="theme-card" data-theme="amber" onclick="changeTheme('amber')">
+                                                <div class="theme-preview amber-theme-preview"></div>
+                                                <div class="theme-name text-white mt-2" data-i18n="theme-amber">Amber</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -737,12 +1353,549 @@
             // Activate nav link
             const navLink = document.querySelector(`.nav-link[onclick="showPage('${pageId}')"]`);
             if(navLink) navLink.classList.add('active');
+            
+            // Update active theme card when opening settings page
+            if (pageId === 'settings') {
+                const currentTheme = localStorage.getItem('yolo_theme') || 'dark';
+                document.querySelectorAll('.theme-card').forEach(card => {
+                    card.classList.remove('active');
+                });
+                const activeCard = document.querySelector(`.theme-card[data-theme="${currentTheme}"]`);
+                if (activeCard) {
+                    activeCard.classList.add('active');
+                }
+            }
+        }
+
+        // Theme management
+        function changeTheme(themeName) {
+            document.body.setAttribute('data-theme', themeName);
+            localStorage.setItem('yolo_theme', themeName);
+            
+            // Update active theme card
+            document.querySelectorAll('.theme-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            const activeCard = document.querySelector(`.theme-card[data-theme="${themeName}"]`);
+            if (activeCard) {
+                activeCard.classList.add('active');
+            }
+        }
+
+        // Translations object (make it global for annotation.js)
+        window.translations = {
+            en: {
+                // Sidebar
+                'nav-home': 'Home',
+                'nav-download': 'Download Images',
+                'nav-classes': 'Define Classes',
+                'nav-annotate': 'Annotate Dataset',
+                'nav-train': 'Train Model',
+                'nav-test': 'Test Model',
+                'nav-settings': 'Settings',
+                // Home page
+                'home-welcome': 'Welcome to',
+                'home-subtitle': 'Create custom object detection models with an intuitive, end-to-end workflow. Download data, annotate images, and train your model all in one place.',
+                'home-quick-start': 'Quick Start',
+                'home-download-title': '1. Download',
+                'home-download-desc': 'Get images from subreddits',
+                'home-download-btn': 'Go to Download',
+                'home-annotate-title': '2. Annotate',
+                'home-annotate-desc': 'Label your dataset',
+                'home-annotate-btn': 'Start Annotating',
+                'home-stats-datasets': 'Datasets',
+                'home-stats-images': 'Images',
+                'home-stats-models': 'Models',
+                // Download page
+                'download-title': 'Download Images from Reddit',
+                'download-subreddit': 'Subreddit Name',
+                'download-class': 'Class Name',
+                'download-limit': 'Image Limit',
+                'download-path': 'Download Path',
+                'download-browse': 'Browse',
+                'download-downloading': 'Downloading...',
+                'download-start': 'Start Download',
+                'download-continue': 'Continue',
+                // Classes page
+                'classes-managed': 'Managed Classes',
+                'classes-input-placeholder': 'Class Name',
+                'classes-add': 'Add Class',
+                'classes-continue': 'Continue to Annotation',
+                'classes-empty': 'No classes defined yet. Add one to get started.',
+                // Annotate page
+                'annotate-load': 'Load Dataset',
+                'annotate-conf': 'Conf',
+                'annotate-auto': 'Auto',
+                'annotate-no-file': 'No file',
+                'annotate-select-class': 'Select Class...',
+                'annotate-undo': 'Undo',
+                'annotate-reset': 'Reset',
+                'annotate-finish': 'Finish & Train',
+                'annotate-placeholder': 'Load a dataset to start annotating',
+                // Train page
+                'train-config': 'Training Configuration',
+                'train-dataset-path': 'Dataset Path',
+                'train-select': 'Select',
+                'train-epochs': 'Epochs',
+                'train-batch-size': 'Batch Size',
+                'train-image-size': 'Image Size',
+                'train-start': 'Start Training',
+                'train-log': 'Training Log',
+                'train-status-idle': 'Idle',
+                'train-status-training': 'Training...',
+                'train-ready': '> Ready to initialize training sequence...',
+                // Test page
+                'test-title': 'Test Model',
+                'test-model-path': 'Model Path',
+                'test-select-pt': 'Select .pt',
+                'test-base': 'Base',
+                'test-image': 'Image to Test',
+                'test-select-image': 'Select Image',
+                'test-confidence': 'Confidence Threshold',
+                'test-run': 'Run Prediction',
+                'test-placeholder': 'Result will appear here',
+                // Settings page
+                'settings-title': 'Settings',
+                'settings-language': 'Language',
+                'settings-theme': 'Theme',
+                // Annotate page
+                'annotate-conf': 'Conf',
+                // Theme names
+                'theme-dark': 'Dark',
+                'theme-light': 'Light',
+                'theme-blue': 'Blue',
+                'theme-green': 'Green',
+                'theme-purple': 'Purple',
+                'theme-cyan': 'Cyan',
+                'theme-pink': 'Pink',
+                'theme-indigo': 'Indigo',
+                'theme-amber': 'Amber',
+                // Messages
+                'msg-class-added': 'Class "{0}" added successfully!',
+                'msg-class-exists': 'Class "{0}" already exists',
+                'msg-enter-subreddit': 'Please enter subreddit name',
+                'msg-download-complete': 'Download complete! You can now load the dataset to start annotating.',
+                'msg-download-error': 'Error: {0}',
+                'msg-images-loaded': 'Loaded {0} images',
+                'msg-no-images-found': 'No images found in the selected folder.',
+                'msg-no-images-loaded': 'No images loaded',
+                'msg-annotation-saved': 'Annotation saved!',
+                'msg-save-error': 'Error saving annotation: {0}',
+                'msg-no-image-loaded': 'No image loaded',
+                'msg-no-model-found': 'No trained model found (models/custom_model/weights/best.pt). Train a model first!',
+                'msg-auto-labeled': 'Auto-labeled {0} objects!',
+                'msg-no-objects': 'No objects detected by the model.',
+                'msg-auto-label-error': 'Auto-label error: {0}',
+                'msg-select-dataset': 'Please select a dataset first',
+                'msg-training-complete': 'Training complete!',
+                'msg-training-failed': 'Training failed: {0}',
+                'msg-base-model-selected': 'Selected base YOLOv8n model (trained on COCO dataset)',
+                'msg-select-model-image': 'Please select both a model and an image.',
+                'msg-prediction-complete': 'Prediction complete!',
+                'msg-prediction-failed': 'Prediction failed: {0}'
+            },
+            ru: {
+                // Sidebar
+                'nav-home': 'Главная',
+                'nav-download': 'Загрузить изображения',
+                'nav-classes': 'Определить классы',
+                'nav-annotate': 'Аннотировать данные',
+                'nav-train': 'Обучить модель',
+                'nav-test': 'Тестировать модель',
+                'nav-settings': 'Настройки',
+                // Home page
+                'home-welcome': 'Добро пожаловать в',
+                'home-subtitle': 'Создавайте модели обнаружения объектов с интуитивным сквозным рабочим процессом. Загружайте данные, аннотируйте изображения и обучайте модель в одном месте.',
+                'home-quick-start': 'Быстрый старт',
+                'home-download-title': '1. Загрузка',
+                'home-download-desc': 'Получите изображения из сабреддитов',
+                'home-download-btn': 'Перейти к загрузке',
+                'home-annotate-title': '2. Аннотация',
+                'home-annotate-desc': 'Пометьте ваш набор данных',
+                'home-annotate-btn': 'Начать аннотацию',
+                'home-stats-datasets': 'Наборы данных',
+                'home-stats-images': 'Изображения',
+                'home-stats-models': 'Модели',
+                // Download page
+                'download-title': 'Загрузить изображения из Reddit',
+                'download-subreddit': 'Название сабреддита',
+                'download-class': 'Название класса',
+                'download-limit': 'Лимит изображений',
+                'download-path': 'Путь загрузки',
+                'download-browse': 'Обзор',
+                'download-downloading': 'Загрузка...',
+                'download-start': 'Начать загрузку',
+                'download-continue': 'Продолжить',
+                // Classes page
+                'classes-managed': 'Управляемые классы',
+                'classes-input-placeholder': 'Название класса',
+                'classes-add': 'Добавить класс',
+                'classes-continue': 'Продолжить к аннотации',
+                'classes-empty': 'Классы еще не определены. Добавьте один, чтобы начать.',
+                // Annotate page
+                'annotate-load': 'Загрузить набор данных',
+                'annotate-conf': 'Уверенность',
+                'annotate-auto': 'Авто',
+                'annotate-no-file': 'Нет файла',
+                'annotate-select-class': 'Выберите класс...',
+                'annotate-undo': 'Отменить',
+                'annotate-reset': 'Сбросить',
+                'annotate-finish': 'Завершить и обучить',
+                'annotate-placeholder': 'Загрузите набор данных, чтобы начать аннотацию',
+                // Train page
+                'train-config': 'Конфигурация обучения',
+                'train-dataset-path': 'Путь к набору данных',
+                'train-select': 'Выбрать',
+                'train-epochs': 'Эпохи',
+                'train-batch-size': 'Размер пакета',
+                'train-image-size': 'Размер изображения',
+                'train-start': 'Начать обучение',
+                'train-log': 'Журнал обучения',
+                'train-status-idle': 'Ожидание',
+                'train-status-training': 'Обучение...',
+                'train-ready': '> Готов к инициализации последовательности обучения...',
+                // Test page
+                'test-title': 'Тестировать модель',
+                'test-model-path': 'Путь к модели',
+                'test-select-pt': 'Выбрать .pt',
+                'test-base': 'Базовый',
+                'test-image': 'Изображение для теста',
+                'test-select-image': 'Выбрать изображение',
+                'test-confidence': 'Порог уверенности',
+                'test-run': 'Запустить предсказание',
+                'test-placeholder': 'Результат появится здесь',
+                // Settings page
+                'settings-title': 'Настройки',
+                'settings-language': 'Язык',
+                'settings-theme': 'Тема',
+                // Theme names
+                'theme-dark': 'Тёмная',
+                'theme-light': 'Светлая',
+                'theme-blue': 'Синяя',
+                'theme-green': 'Зелёная',
+                'theme-purple': 'Фиолетовая',
+                'theme-cyan': 'Голубая',
+                'theme-pink': 'Розовая',
+                'theme-indigo': 'Индиго',
+                'theme-amber': 'Янтарная',
+                // Messages
+                'msg-class-added': 'Класс "{0}" успешно добавлен!',
+                'msg-class-exists': 'Класс "{0}" уже существует',
+                'msg-enter-subreddit': 'Пожалуйста, введите название сабреддита',
+                'msg-download-complete': 'Загрузка завершена! Теперь вы можете загрузить набор данных для начала аннотации.',
+                'msg-download-error': 'Ошибка: {0}',
+                'msg-images-loaded': 'Загружено {0} изображений',
+                'msg-no-images-found': 'В выбранной папке не найдено изображений.',
+                'msg-no-images-loaded': 'Изображения не загружены',
+                'msg-annotation-saved': 'Аннотация сохранена!',
+                'msg-save-error': 'Ошибка сохранения аннотации: {0}',
+                'msg-no-image-loaded': 'Изображение не загружено',
+                'msg-no-model-found': 'Обученная модель не найдена (models/custom_model/weights/best.pt). Сначала обучите модель!',
+                'msg-auto-labeled': 'Автоматически помечено {0} объектов!',
+                'msg-no-objects': 'Модель не обнаружила объектов.',
+                'msg-auto-label-error': 'Ошибка автоматической разметки: {0}',
+                'msg-select-dataset': 'Пожалуйста, сначала выберите набор данных',
+                'msg-training-complete': 'Обучение завершено!',
+                'msg-training-failed': 'Ошибка обучения: {0}',
+                'msg-base-model-selected': 'Выбрана базовая модель YOLOv8n (обучена на наборе данных COCO)',
+                'msg-select-model-image': 'Пожалуйста, выберите модель и изображение.',
+                'msg-prediction-complete': 'Предсказание завершено!',
+                'msg-prediction-failed': 'Ошибка предсказания: {0}'
+            },
+            ja: {
+                // Sidebar
+                'nav-home': 'ホーム',
+                'nav-download': '画像をダウンロード',
+                'nav-classes': 'クラスを定義',
+                'nav-annotate': 'データセットに注釈',
+                'nav-train': 'モデルを訓練',
+                'nav-test': 'モデルをテスト',
+                'nav-settings': '設定',
+                // Home page
+                'home-welcome': 'へようこそ',
+                'home-subtitle': '直感的なエンドツーエンドのワークフローでカスタムオブジェクト検出モデルを作成します。データをダウンロードし、画像に注釈を付け、すべてを1つの場所でモデルを訓練します。',
+                'home-quick-start': 'クイックスタート',
+                'home-download-title': '1. ダウンロード',
+                'home-download-desc': 'サブレディットから画像を取得',
+                'home-download-btn': 'ダウンロードに移動',
+                'home-annotate-title': '2. 注釈',
+                'home-annotate-desc': 'データセットにラベルを付ける',
+                'home-annotate-btn': '注釈を開始',
+                'home-stats-datasets': 'データセット',
+                'home-stats-images': '画像',
+                'home-stats-models': 'モデル',
+                // Download page
+                'download-title': 'Redditから画像をダウンロード',
+                'download-subreddit': 'サブレディット名',
+                'download-class': 'クラス名',
+                'download-limit': '画像制限',
+                'download-path': 'ダウンロードパス',
+                'download-browse': '参照',
+                'download-downloading': 'ダウンロード中...',
+                'download-start': 'ダウンロードを開始',
+                'download-continue': '続ける',
+                // Classes page
+                'classes-managed': '管理されたクラス',
+                'classes-input-placeholder': 'クラス名',
+                'classes-add': 'クラスを追加',
+                'classes-continue': '注釈に続く',
+                'classes-empty': 'クラスがまだ定義されていません。開始するには1つ追加してください。',
+                // Annotate page
+                'annotate-load': 'データセットを読み込む',
+                'annotate-conf': '信頼度',
+                'annotate-auto': '自動',
+                'annotate-no-file': 'ファイルなし',
+                'annotate-select-class': 'クラスを選択...',
+                'annotate-undo': '元に戻す',
+                'annotate-reset': 'リセット',
+                'annotate-finish': '完了して訓練',
+                'annotate-placeholder': 'データセットを読み込んで注釈を開始',
+                // Train page
+                'train-config': '訓練設定',
+                'train-dataset-path': 'データセットパス',
+                'train-select': '選択',
+                'train-epochs': 'エポック',
+                'train-batch-size': 'バッチサイズ',
+                'train-image-size': '画像サイズ',
+                'train-start': '訓練を開始',
+                'train-log': '訓練ログ',
+                'train-status-idle': '待機中',
+                'train-status-training': '訓練中...',
+                'train-ready': '> 訓練シーケンスの初期化準備完了...',
+                // Test page
+                'test-title': 'モデルをテスト',
+                'test-model-path': 'モデルパス',
+                'test-select-pt': '.ptを選択',
+                'test-base': 'ベース',
+                'test-image': 'テストする画像',
+                'test-select-image': '画像を選択',
+                'test-confidence': '信頼度のしきい値',
+                'test-run': '予測を実行',
+                'test-placeholder': '結果がここに表示されます',
+                // Settings page
+                'settings-title': '設定',
+                'settings-language': '言語',
+                'settings-theme': 'テーマ',
+                // Annotate page
+                'annotate-conf': '信頼度',
+                // Theme names
+                'theme-dark': 'ダーク',
+                'theme-light': 'ライト',
+                'theme-blue': 'ブルー',
+                'theme-green': 'グリーン',
+                'theme-purple': 'パープル',
+                'theme-cyan': 'シアン',
+                'theme-pink': 'ピンク',
+                'theme-indigo': 'インディゴ',
+                'theme-amber': 'アンバー',
+                // Messages
+                'msg-class-added': 'クラス "{0}" が正常に追加されました！',
+                'msg-class-exists': 'クラス "{0}" は既に存在します',
+                'msg-enter-subreddit': 'サブレディット名を入力してください',
+                'msg-download-complete': 'ダウンロードが完了しました！データセットを読み込んで注釈を開始できます。',
+                'msg-download-error': 'エラー: {0}',
+                'msg-images-loaded': '{0} 枚の画像を読み込みました',
+                'msg-no-images-found': '選択したフォルダに画像が見つかりませんでした。',
+                'msg-no-images-loaded': '画像が読み込まれていません',
+                'msg-annotation-saved': '注釈が保存されました！',
+                'msg-save-error': '注釈の保存エラー: {0}',
+                'msg-no-image-loaded': '画像が読み込まれていません',
+                'msg-no-model-found': '訓練されたモデルが見つかりません (models/custom_model/weights/best.pt)。まずモデルを訓練してください！',
+                'msg-auto-labeled': '{0} 個のオブジェクトを自動ラベル付けしました！',
+                'msg-no-objects': 'モデルがオブジェクトを検出しませんでした。',
+                'msg-auto-label-error': '自動ラベル付けエラー: {0}',
+                'msg-select-dataset': 'まずデータセットを選択してください',
+                'msg-training-complete': '訓練が完了しました！',
+                'msg-training-failed': '訓練に失敗しました: {0}',
+                'msg-base-model-selected': 'ベース YOLOv8n モデルを選択しました (COCO データセットで訓練済み)',
+                'msg-select-model-image': 'モデルと画像の両方を選択してください。',
+                'msg-prediction-complete': '予測が完了しました！',
+                'msg-prediction-failed': '予測に失敗しました: {0}'
+            },
+            uz: {
+                // Sidebar
+                'nav-home': 'Bosh sahifa',
+                'nav-download': 'Rasmlarni yuklab olish',
+                'nav-classes': 'Klasslarni belgilash',
+                'nav-annotate': 'Ma\'lumotlar to\'plamini annotatsiya qilish',
+                'nav-train': 'Modelni o\'qitish',
+                'nav-test': 'Modelni sinash',
+                'nav-settings': 'Sozlamalar',
+                // Home page
+                'home-welcome': 'Xush kelibsiz',
+                'home-subtitle': 'Intuitiv, yakuniy ish oqimi bilan maxsus ob\'ekt aniqlash modellarini yarating. Ma\'lumotlarni yuklab oling, rasmlarni annotatsiya qiling va modelni bitta joyda o\'qiting.',
+                'home-quick-start': 'Tezkor boshlash',
+                'home-download-title': '1. Yuklab olish',
+                'home-download-desc': 'Subredditlardan rasmlarni oling',
+                'home-download-btn': 'Yuklab olishga o\'tish',
+                'home-annotate-title': '2. Annotatsiya',
+                'home-annotate-desc': 'Ma\'lumotlar to\'plamingizga yorliq qo\'ying',
+                'home-annotate-btn': 'Annotatsiyani boshlash',
+                'home-stats-datasets': 'Ma\'lumotlar to\'plamlari',
+                'home-stats-images': 'Rasmlar',
+                'home-stats-models': 'Modellar',
+                // Download page
+                'download-title': 'Reddit\'dan rasmlarni yuklab olish',
+                'download-subreddit': 'Subreddit nomi',
+                'download-class': 'Klass nomi',
+                'download-limit': 'Rasm chegarasi',
+                'download-path': 'Yuklab olish yo\'li',
+                'download-browse': 'Ko\'rib chiqish',
+                'download-downloading': 'Yuklanmoqda...',
+                'download-start': 'Yuklab olishni boshlash',
+                'download-continue': 'Davom etish',
+                // Classes page
+                'classes-managed': 'Boshqariladigan klasslar',
+                'classes-input-placeholder': 'Klass nomi',
+                'classes-add': 'Klass qo\'shish',
+                'classes-continue': 'Annotatsiyaga o\'tish',
+                'classes-empty': 'Hali klasslar belgilanmagan. Boshlash uchun bittasini qo\'shing.',
+                // Annotate page
+                'annotate-load': 'Ma\'lumotlar to\'plamini yuklash',
+                'annotate-conf': 'Ishonch',
+                'annotate-auto': 'Avto',
+                'annotate-no-file': 'Fayl yo\'q',
+                'annotate-select-class': 'Klassni tanlang...',
+                'annotate-undo': 'Bekor qilish',
+                'annotate-reset': 'Qayta tiklash',
+                'annotate-finish': 'Tugatish va o\'qitish',
+                'annotate-placeholder': 'Annotatsiyani boshlash uchun ma\'lumotlar to\'plamini yuklang',
+                // Train page
+                'train-config': 'O\'qitish konfiguratsiyasi',
+                'train-dataset-path': 'Ma\'lumotlar to\'plami yo\'li',
+                'train-select': 'Tanlash',
+                'train-epochs': 'Epoxalar',
+                'train-batch-size': 'Paket o\'lchami',
+                'train-image-size': 'Rasm o\'lchami',
+                'train-start': 'O\'qitishni boshlash',
+                'train-log': 'O\'qitish jurnali',
+                'train-status-idle': 'Kutish',
+                'train-status-training': 'O\'qitilmoqda...',
+                'train-ready': '> O\'qitish ketma-ketligini boshlashga tayyor...',
+                // Test page
+                'test-title': 'Modelni sinash',
+                'test-model-path': 'Model yo\'li',
+                'test-select-pt': '.pt tanlash',
+                'test-base': 'Asosiy',
+                'test-image': 'Sinash uchun rasm',
+                'test-select-image': 'Rasmni tanlash',
+                'test-confidence': 'Ishonchlilik chegarasi',
+                'test-run': 'Bashoratni ishga tushirish',
+                'test-placeholder': 'Natija bu yerda ko\'rinadi',
+                // Settings page
+                'settings-title': 'Sozlamalar',
+                'settings-language': 'Til',
+                'settings-theme': 'Mavzu',
+                // Theme names
+                'theme-dark': 'Qorong\'i',
+                'theme-light': 'Yorug\'',
+                'theme-blue': 'Ko\'k',
+                'theme-green': 'Yashil',
+                'theme-purple': 'Binafsha',
+                'theme-cyan': 'Moviy',
+                'theme-pink': 'Pushti',
+                'theme-indigo': 'Indigo',
+                'theme-amber': 'Amber',
+                // Messages
+                'msg-class-added': 'Klass "{0}" muvaffaqiyatli qo\'shildi!',
+                'msg-class-exists': 'Klass "{0}" allaqachon mavjud',
+                'msg-enter-subreddit': 'Iltimos, subreddit nomini kiriting',
+                'msg-download-complete': 'Yuklab olish tugadi! Endi annotatsiyani boshlash uchun ma\'lumotlar to\'plamini yuklashingiz mumkin.',
+                'msg-download-error': 'Xato: {0}',
+                'msg-images-loaded': '{0} ta rasm yuklandi',
+                'msg-no-images-found': 'Tanlangan papkada rasmlar topilmadi.',
+                'msg-no-images-loaded': 'Rasmlar yuklanmadi',
+                'msg-annotation-saved': 'Annotatsiya saqlandi!',
+                'msg-save-error': 'Annotatsiyani saqlashda xato: {0}',
+                'msg-no-image-loaded': 'Rasm yuklanmadi',
+                'msg-no-model-found': 'O\'qitilgan model topilmadi (models/custom_model/weights/best.pt). Avval modelni o\'qiting!',
+                'msg-auto-labeled': '{0} ta ob\'ekt avtomatik belgilandi!',
+                'msg-no-objects': 'Model ob\'ektlarni aniqladi.',
+                'msg-auto-label-error': 'Avtomatik belgilash xatosi: {0}',
+                'msg-select-dataset': 'Iltimos, avval ma\'lumotlar to\'plamini tanlang',
+                'msg-training-complete': 'O\'qitish tugadi!',
+                'msg-training-failed': 'O\'qitish xatosi: {0}',
+                'msg-base-model-selected': 'Asosiy YOLOv8n modeli tanlandi (COCO ma\'lumotlar to\'plamida o\'qitilgan)',
+                'msg-select-model-image': 'Iltimos, model va rasmni tanlang.',
+                'msg-prediction-complete': 'Bashorat tugadi!',
+                'msg-prediction-failed': 'Bashorat xatosi: {0}'
+            }
+        };
+
+        // Language management
+        function changeLanguage(langCode) {
+            localStorage.setItem('yolo_language', langCode);
+            applyTranslations(langCode);
+        }
+
+        // Apply translations to the page
+        function applyTranslations(langCode) {
+            const lang = translations[langCode] || translations.en;
+            
+            // Update all elements with data-i18n attribute
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                if (lang[key]) {
+                    if (element.tagName === 'INPUT' && element.type !== 'button' && element.type !== 'submit') {
+                        // Don't change placeholder for inputs with data-i18n, use data-i18n-placeholder instead
+                        if (!element.hasAttribute('data-i18n-placeholder')) {
+                            // Only update value if it's not a readonly input
+                            if (!element.readOnly) {
+                                element.value = lang[key];
+                            }
+                        }
+                    } else if (element.tagName === 'OPTION') {
+                        element.textContent = lang[key];
+                    } else if (element.tagName === 'BUTTON' || element.tagName === 'A') {
+                        // For buttons and links, update text but keep icons
+                        const icon = element.querySelector('i');
+                        if (icon) {
+                            element.innerHTML = icon.outerHTML + ' ' + lang[key];
+                        } else {
+                            element.textContent = lang[key];
+                        }
+                    } else {
+                        element.textContent = lang[key];
+                    }
+                }
+            });
+            
+            // Update all elements with data-i18n-placeholder attribute
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+                const key = element.getAttribute('data-i18n-placeholder');
+                if (lang[key]) {
+                    element.placeholder = lang[key];
+                }
+            });
+            
+            // Update language select value
+            const languageSelect = document.getElementById('language-select');
+            if (languageSelect) {
+                languageSelect.value = langCode;
+            }
+        }
+
+        // Load saved settings
+        function loadSettings() {
+            // Load theme
+            const savedTheme = localStorage.getItem('yolo_theme') || 'dark';
+            changeTheme(savedTheme);
+            
+            // Load language and apply translations
+            const savedLanguage = localStorage.getItem('yolo_language') || 'en';
+            const languageSelect = document.getElementById('language-select');
+            if (languageSelect) {
+                languageSelect.value = savedLanguage;
+            }
+            applyTranslations(savedLanguage);
         }
 
         // Initialize Home
         document.addEventListener('DOMContentLoaded', () => {
              // Ensure correct page is shown on load
              showPage('home');
+             // Load saved settings
+             loadSettings();
         });
     </script>
 </body>

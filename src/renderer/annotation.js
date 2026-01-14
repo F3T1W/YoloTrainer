@@ -8,6 +8,7 @@ window.saveAnnotation = saveAnnotation;
 window.clearAnnotations = clearAnnotations;
 window.undoAnnotation = undoAnnotation;
 window.handleAutoLabel = handleAutoLabel;
+window.toggleAutoLabel = toggleAutoLabel;
 
 // Initialize
 if (document.readyState === 'loading') {
@@ -43,11 +44,31 @@ function init() {
         }
     });
     
+    // Load and display statistics
+    updateStats();
+    
     // ... rest of init
     
-    // Load default classes
-    classes = [];
-    selectedClass = classes[0];
+    // Load default classes or from localStorage
+    const savedClasses = localStorage.getItem('yolo_classes');
+    if (savedClasses) {
+        try {
+            classes = JSON.parse(savedClasses);
+        } catch (e) {
+            console.error('Failed to parse saved classes', e);
+            classes = [];
+        }
+    } else {
+        classes = [];
+    }
+    
+    // Load selected class from localStorage
+    const savedSelectedClass = localStorage.getItem('yolo_selected_class');
+    if (savedSelectedClass && classes.includes(savedSelectedClass)) {
+        selectedClass = savedSelectedClass;
+    } else {
+        selectedClass = classes[0] || null;
+    }
     
     // Navigation - menu items
     document.querySelectorAll('.menu-item').forEach(item => {
@@ -80,6 +101,9 @@ function init() {
             if (data.includes('Epoch')) {
                 trainingStatus.textContent = 'Training...';
                 trainingStatus.className = 'badge bg-primary pulse-animation';
+            }
+            if (data.includes('Training complete')) {
+                incrementModels();
             }
         }
     });
@@ -402,6 +426,7 @@ function renderClasses() {
                 
                 badge.onclick = () => {
                     selectedClass = cls;
+                    saveClasses(); // Save selected class
                     renderClasses(); // Re-render to update active state
                 };
                 
@@ -425,7 +450,16 @@ function renderClasses() {
         // Add event listener if not already added (or just update on change)
         classSelector.onchange = (e) => {
             selectedClass = e.target.value;
+            saveClasses(); // Save selected class
         };
+    }
+}
+
+// Helper to save classes
+function saveClasses() {
+    localStorage.setItem('yolo_classes', JSON.stringify(classes));
+    if (selectedClass) {
+        localStorage.setItem('yolo_selected_class', selectedClass);
     }
 }
 
@@ -433,6 +467,7 @@ function renderClasses() {
 window.removeClass = function(cls) {
     if (confirm(`Delete class "${cls}"?`)) {
         classes = classes.filter(c => c !== cls);
+        saveClasses(); // Save to storage
         if (selectedClass === cls) {
             selectedClass = classes[0] || null;
         }
@@ -448,6 +483,8 @@ function addClass() {
     const newClass = newClassInput.value.trim();
     if (newClass && !classes.includes(newClass)) {
         classes.push(newClass);
+        selectedClass = newClass; // Automatically select the newly added class
+        saveClasses(); // Save to storage
         renderClasses();
         newClassInput.value = '';
         checkWorkflowStatus();
@@ -463,10 +500,10 @@ function addClass() {
             `;
             // Insert alert after the card body, or append to a specific container
             // For now, let's use showMessage toast which is more consistent
-            showMessage(`Class "${newClass}" added successfully!`, 'success');
+            showMessage(`msg-class-added:${newClass}`, 'success');
         }
     } else if (classes.includes(newClass)) {
-        showMessage(`Class "${newClass}" already exists`, 'warning');
+        showMessage(`msg-class-exists:${newClass}`, 'warning');
     }
 }
 
@@ -506,7 +543,7 @@ async function handleDownload(e) {
     const outputDir = outputDirInput ? outputDirInput.value.trim() : '';
     
     if (!subreddit) {
-        showMessage('Please enter subreddit name', 'warning');
+        showMessage('msg-enter-subreddit', 'warning');
         return;
     }
     
@@ -526,18 +563,53 @@ async function handleDownload(e) {
             output_dir: outputDir
         });
         
-        showMessage('Download complete! You can now load the dataset to start annotating.', 'success');
+        // Update statistics
+        incrementDatasets();
+        // Try to get actual downloaded count from result, fallback to limit
+        const downloadedCount = result?.downloaded || limit;
+        incrementImages(downloadedCount);
+        
+        showMessage('msg-download-complete', 'success');
         downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
         checkWorkflowStatus();
     } catch (e) {
-        showMessage('Error: ' + e.message, 'danger');
+        showMessage(`msg-download-error:${e.message}`, 'danger');
         downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
     } finally {
         downloadBtn.disabled = false;
     }
 }
 
+function translateMessage(key, ...args) {
+    // Get current language
+    const currentLang = localStorage.getItem('yolo_language') || 'en';
+    
+    // Get translations object from window (it's defined in index.html)
+    if (!window.translations || !window.translations[currentLang]) {
+        return key; // Fallback to key if translations not available
+    }
+    
+    let message = window.translations[currentLang][key] || window.translations.en[key] || key;
+    
+    // Replace placeholders {0}, {1}, etc. with arguments
+    args.forEach((arg, index) => {
+        message = message.replace(`{${index}}`, String(arg));
+    });
+    
+    return message;
+}
+
 function showMessage(message, type = 'info') {
+    // Check if message is a translation key (starts with 'msg-')
+    let displayMessage = message;
+    if (message.startsWith('msg-')) {
+        // Extract arguments if any (format: 'msg-key:arg1:arg2')
+        const parts = message.split(':');
+        const key = parts[0];
+        const args = parts.slice(1);
+        displayMessage = translateMessage(key, ...args);
+    }
+    
     // Create toast notification
     const toastContainer = document.getElementById('toastContainer') || createToastContainer();
     
@@ -546,7 +618,7 @@ function showMessage(message, type = 'info') {
     toast.setAttribute('role', 'alert');
     toast.innerHTML = `
         <div class="d-flex">
-            <div class="toast-body">${message}</div>
+            <div class="toast-body">${displayMessage}</div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
         </div>
     `;
@@ -606,9 +678,9 @@ async function loadDataset(datasetPath) {
     
     if (images.length > 0) {
         await loadImage(0);
-        showMessage(`Loaded ${images.length} images`, 'success');
+        showMessage(`msg-images-loaded:${images.length}`, 'success');
     } else {
-        showMessage('No images found in the selected folder.', 'warning');
+        showMessage('msg-no-images-found', 'warning');
     }
     
     updateProgress();
@@ -688,6 +760,15 @@ async function loadImage(index) {
         drawImage();
         loadAnnotations().then(() => {
             updateProgress();
+            
+            // Auto-label if toggle is enabled
+            const autoLabelBtn = document.getElementById('btn-auto-label');
+            if (autoLabelBtn && autoLabelBtn.classList.contains('active')) {
+                // Small delay to ensure image is fully loaded
+                setTimeout(() => {
+                    handleAutoLabel(true); // Pass true to indicate auto-triggered
+                }, 300);
+            }
         });
     };
 }
@@ -908,7 +989,7 @@ function undoAnnotation() {
 
 async function saveAnnotation() {
     if (images.length === 0) {
-        showMessage('No images loaded', 'warning');
+        showMessage('msg-no-images-loaded', 'warning');
         return;
     }
     
@@ -941,7 +1022,7 @@ async function saveAnnotation() {
             classNames: classes
         });
         
-        showMessage('Annotation saved!', 'success');
+        showMessage('msg-annotation-saved', 'success');
         
         // Update workflow status
         checkWorkflowStatus();
@@ -952,29 +1033,63 @@ async function saveAnnotation() {
         // Move to next
         navigateImage(1);
     } catch (e) {
-        showMessage('Error saving annotation: ' + e.message, 'danger');
+        showMessage(`msg-save-error:${e.message}`, 'danger');
     }
 }
 
-async function handleAutoLabel() {
+function toggleAutoLabel() {
+    const btn = document.getElementById('btn-auto-label');
+    if (!btn) return;
+    
+    const isActive = btn.classList.contains('active');
+    
+    if (isActive) {
+        // Turn off
+        btn.classList.remove('active');
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-outline-warning');
+    } else {
+        // Turn on
+        btn.classList.add('active');
+        btn.classList.remove('btn-outline-warning');
+        btn.classList.add('btn-warning');
+        // Immediately run auto-label on current image
+        if (currentImage) {
+            handleAutoLabel(true);
+        }
+    }
+}
+
+async function handleAutoLabel(autoTriggered = false) {
     if (images.length === 0 || !currentImage) {
-        showMessage('No image loaded', 'warning');
+        if (!autoTriggered) {
+            showMessage('msg-no-image-loaded', 'warning');
+        }
         return;
     }
 
     const btn = document.getElementById('btn-auto-label');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    if (!btn) return;
+    
+    // Only show spinner if manually triggered
+    if (!autoTriggered) {
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
 
     try {
         // Get path to best.pt
         const modelPath = await ipcRenderer.invoke('get-trained-model-path');
         
         if (!modelPath) {
-             showMessage('No trained model found (models/custom_model/weights/best.pt). Train a model first!', 'warning');
-             btn.disabled = false;
-             btn.innerHTML = originalText;
+             if (!autoTriggered) {
+                 showMessage('msg-no-model-found', 'warning');
+                 if (btn) {
+                     btn.disabled = false;
+                     btn.innerHTML = '<i class="bi bi-magic"></i> Auto';
+                 }
+             }
              return;
         }
 
@@ -988,10 +1103,13 @@ async function handleAutoLabel() {
         }
 
         // Run prediction
+        const confInput = document.getElementById('auto-label-conf');
+        const confidence = confInput ? parseFloat(confInput.value) : 0.25;
+        
         const result = await ipcRenderer.invoke('predict-image', {
             modelPath: modelPath,
             imagePath: imagePath,
-            conf: 0.25
+            conf: confidence
         });
 
         if (result.success && result.detections) {
@@ -1016,10 +1134,13 @@ async function handleAutoLabel() {
             });
 
             if (newAnnotations.length > 0) {
-                if (currentAnnotations.length > 0) {
+                // If auto-triggered, always replace without asking
+                if (currentAnnotations.length > 0 && !autoTriggered) {
                     if (!confirm(`Found ${newAnnotations.length} objects. Replace existing annotations?`)) {
-                        btn.disabled = false;
-                        btn.innerHTML = originalText;
+                        if (btn && !autoTriggered) {
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="bi bi-magic"></i> Auto';
+                        }
                         return;
                     }
                 }
@@ -1027,9 +1148,13 @@ async function handleAutoLabel() {
                 currentAnnotations = newAnnotations;
                 drawAnnotations();
                 updateAnnotationCount();
-                showMessage(`Auto-labeled ${newAnnotations.length} objects!`, 'success');
+                if (!autoTriggered) {
+                    showMessage(`msg-auto-labeled:${newAnnotations.length}`, 'success');
+                }
             } else {
-                showMessage('No objects detected by the model.', 'info');
+                if (!autoTriggered) {
+                    showMessage('msg-no-objects', 'info');
+                }
             }
         } else {
              throw new Error('Prediction failed or no output.');
@@ -1037,10 +1162,14 @@ async function handleAutoLabel() {
 
     } catch (e) {
         console.error(e);
-        showMessage('Auto-label error: ' + e.message, 'danger');
+        if (!autoTriggered) {
+            showMessage(`msg-auto-label-error:${e.message}`, 'danger');
+        }
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+        if (btn && !autoTriggered) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-magic"></i> Auto';
+        }
     }
 }
 
@@ -1065,7 +1194,7 @@ async function startTraining() {
     const datasetPath = trainDatasetPath ? trainDatasetPath.value.trim() : currentDatasetPath;
     
     if (!datasetPath) {
-        showMessage('Please select a dataset first', 'warning');
+        showMessage('msg-select-dataset', 'warning');
         return;
     }
     
@@ -1099,15 +1228,18 @@ async function startTraining() {
             classNames: classes // Pass global classes array
         });
         
-        showMessage('Training complete!', 'success');
+        showMessage('msg-training-complete', 'success');
         trainBtn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i> Start Training';
+        
+        // Increment models counter
+        incrementModels();
         
         if (trainingStatus) {
             trainingStatus.innerText = 'Completed';
             trainingStatus.className = 'badge bg-success';
         }
     } catch (e) {
-        showMessage('Training failed: ' + e.message, 'danger');
+        showMessage(`msg-training-failed:${e.message}`, 'danger');
         trainBtn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i> Start Training';
         
         if (trainingStatus) {
@@ -1127,15 +1259,39 @@ async function startTraining() {
 }
 
 function updateStats() {
-    // Update home page statistics
-    // This would ideally fetch real data, but for now we'll use placeholder
+    // Load statistics from localStorage
     const statDatasets = document.getElementById('stat-datasets');
     const statImages = document.getElementById('stat-images');
     const statModels = document.getElementById('stat-models');
     
-    if (statDatasets) statDatasets.textContent = '0';
-    if (statImages) statImages.textContent = images.length || '0';
-    if (statModels) statModels.textContent = '0';
+    const datasets = parseInt(localStorage.getItem('yolo_stat_datasets') || '0');
+    const images = parseInt(localStorage.getItem('yolo_stat_images') || '0');
+    const models = parseInt(localStorage.getItem('yolo_stat_models') || '0');
+    
+    if (statDatasets) statDatasets.textContent = datasets;
+    if (statImages) statImages.textContent = images;
+    if (statModels) statModels.textContent = models;
+}
+
+function incrementDatasets() {
+    const current = parseInt(localStorage.getItem('yolo_stat_datasets') || '0');
+    const newValue = current + 1;
+    localStorage.setItem('yolo_stat_datasets', newValue.toString());
+    updateStats();
+}
+
+function incrementImages(count) {
+    const current = parseInt(localStorage.getItem('yolo_stat_images') || '0');
+    const newValue = current + count;
+    localStorage.setItem('yolo_stat_images', newValue.toString());
+    updateStats();
+}
+
+function incrementModels() {
+    const current = parseInt(localStorage.getItem('yolo_stat_models') || '0');
+    const newValue = current + 1;
+    localStorage.setItem('yolo_stat_models', newValue.toString());
+    updateStats();
 }
 
 // Test Model Functions
@@ -1152,7 +1308,7 @@ window.useBaseModel = async function() {
     const path = await ipcRenderer.invoke('get-base-model-path');
     if (path) {
         document.getElementById('test-model-path').value = path;
-        showMessage('Selected base YOLOv8n model (trained on COCO dataset)', 'info');
+        showMessage('msg-base-model-selected', 'info');
     }
 };
 
@@ -1176,7 +1332,7 @@ window.runPrediction = async function() {
     const logsDiv = document.getElementById('prediction-logs');
     
     if (!modelPath || !imagePath) {
-        showMessage('Please select both a model and an image.', 'warning');
+        showMessage('msg-select-model-image', 'warning');
         return;
     }
     
@@ -1200,7 +1356,7 @@ window.runPrediction = async function() {
             resultImg.src = `file://${result.resultPath}${cacheBuster}`;
             resultImg.style.display = 'block';
             spinner.style.display = 'none';
-            showMessage('Prediction complete!', 'success');
+            showMessage('msg-prediction-complete', 'success');
             
             // Show logs
             if (logsDiv) {
@@ -1230,7 +1386,7 @@ window.runPrediction = async function() {
         spinner.style.display = 'none';
         placeholder.style.display = 'block';
         placeholder.innerHTML = `<i class="bi bi-exclamation-triangle fs-1 text-danger mb-2"></i><br>Error: ${e.message}`;
-        showMessage('Prediction failed: ' + e.message, 'danger');
+        showMessage(`msg-prediction-failed:${e.message}`, 'danger');
         
         if (logsDiv) {
             logsDiv.innerHTML = `Error: ${e.message}`;

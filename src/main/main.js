@@ -77,9 +77,19 @@ ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class
     ]);
 
     let output = '';
+    let downloadedCount = 0;
+    
     pythonProcess.stdout.on('data', (d) => {
-      output += d.toString();
-      if (mainWindow) mainWindow.webContents.send('download-progress', d.toString());
+      const data = d.toString();
+      output += data;
+      if (mainWindow) mainWindow.webContents.send('download-progress', data);
+      
+      // Try to extract downloaded count from output
+      // Look for patterns like "Downloaded X/Y:" or "Download complete! X images"
+      const match = data.match(/Downloaded\s+(\d+)\/(\d+):|Download complete!\s+(\d+)\s+images/);
+      if (match) {
+        downloadedCount = parseInt(match[1] || match[3] || 0);
+      }
     });
     
     pythonProcess.stderr.on('data', (d) => {
@@ -88,7 +98,17 @@ ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class
 
     pythonProcess.on('close', (code) => {
       if (code === 0) {
-        resolve({ success: true, message: output });
+        // If we couldn't extract from output, try to parse the last line
+        if (downloadedCount === 0) {
+          const lastLineMatch = output.match(/Download complete!\s+(\d+)\s+images/);
+          if (lastLineMatch) {
+            downloadedCount = parseInt(lastLineMatch[1]);
+          } else {
+            // Fallback: use limit as approximation
+            downloadedCount = limit;
+          }
+        }
+        resolve({ success: true, message: output, downloaded: downloadedCount });
       } else {
         reject(new Error(`Process exited with code ${code}`));
       }
