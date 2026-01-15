@@ -62,6 +62,7 @@ jobs:
 
       - name: Get version from tag and update package.json
         id: version
+        shell: bash
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
