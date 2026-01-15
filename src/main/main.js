@@ -14,6 +14,39 @@ try {
   // Configure auto-updater
   autoUpdater.setAutoDownload(false); // Don't auto-download, let user decide
   autoUpdater.autoInstallOnAppQuit = true; // Install on app quit after download
+  
+  // Set feed URL for GitHub releases (only in production)
+  if (process.env.NODE_ENV !== 'development' && !process.argv.includes('--dev')) {
+    // Get owner and repo from package.json build.publish or repository.url
+    const packageJson = require('../../package.json');
+    let owner, repo;
+    
+    // First try to get from build.publish (more reliable)
+    if (packageJson.build?.publish?.owner && packageJson.build?.publish?.repo) {
+      owner = packageJson.build.publish.owner;
+      repo = packageJson.build.publish.repo;
+    } else {
+      // Fallback to parsing repository URL
+      const repoUrl = packageJson.repository?.url || '';
+      const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)(?:\.git)?$/);
+      if (match) {
+        owner = match[1];
+        repo = match[2].replace('.git', '');
+      }
+    }
+    
+    if (owner && repo) {
+      autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: owner,
+        repo: repo
+      });
+      console.log(`Auto-updater configured for GitHub: ${owner}/${repo}`);
+    } else {
+      console.warn('Could not determine GitHub repository from package.json');
+    }
+  }
+  
   console.log('Auto-updater enabled');
 } catch (e) {
   console.log('electron-updater not available, update functionality disabled:', e.message);
