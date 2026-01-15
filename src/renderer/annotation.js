@@ -37,15 +37,14 @@ function init() {
     
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-        // Only if annotation page is active
-        const annotatePage = document.getElementById('page-annotate');
-        if (!annotatePage || !annotatePage.classList.contains('active')) return;
-        
         // Ignore if typing in an input
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         
+        // Annotation page shortcuts
+        const annotatePage = document.getElementById('page-annotate');
+        if (annotatePage && annotatePage.classList.contains('active')) {
         if (e.key === 'Enter' || e.key === 'ArrowRight' || e.code === 'Space') {
-            e.preventDefault(); // Prevent scrolling
+                e.preventDefault();
             saveAnnotation();
         } else if (e.key === 'ArrowLeft') {
             e.preventDefault();
@@ -54,19 +53,58 @@ function init() {
             e.preventDefault();
             undoAnnotation();
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
-            // Delete selected annotation (if we implement selection later)
             undoAnnotation(); 
+            }
+            return;
+        }
+        
+        // Test page shortcuts
+        const testPage = document.getElementById('page-test');
+        if (testPage && testPage.classList.contains('active')) {
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                navigateTestImage(-1);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                navigateTestImage(1);
+            }
+            return;
         }
     });
+    
+    // Add event listener for confidence threshold change on test page
+    const testConfInput = document.getElementById('test-conf-threshold');
+    if (testConfInput) {
+        testConfInput.addEventListener('input', async () => {
+            // If we have a loaded image and model, re-run prediction
+            if (testCurrentImageIndex >= 0 && testImages.length > 0) {
+                const modelPath = document.getElementById('test-model-path')?.value;
+                if (modelPath) {
+                    const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
+                    let imagePath;
+                    if (hasImagesSubdir) {
+                        imagePath = path.join(testDatasetPath, 'images', testImages[testCurrentImageIndex]);
+                        const existsInSub = await ipcRenderer.invoke('file-exists', imagePath);
+                        if (!existsInSub) {
+                            imagePath = path.join(testDatasetPath, testImages[testCurrentImageIndex]);
+                        }
+                    } else {
+                        imagePath = path.join(testDatasetPath, testImages[testCurrentImageIndex]);
+                    }
+                    await runTestPrediction(imagePath);
+                }
+            }
+        });
+    }
     
     // Load and display statistics
     updateStats();
     
-    // Load three-step system state
-    loadThreeStepSystemState();
-    
-    // Load admin mode state
+    // Load admin mode state first (before three-step system, so it can affect its UI)
     loadAdminModeState();
+    
+    // Load three-step system state (this will also update UI with admin mode settings)
+    loadThreeStepSystemState();
     
     // Setup logo click handler for admin mode
     setupAdminModeToggle();
@@ -317,6 +355,13 @@ const path = require('path');
 // State
 let currentDatasetPath = null;
 let images = [];
+// Test page variables
+let testImages = [];
+let testCurrentImageIndex = 0;
+let testDatasetPath = null;
+let testCurrentImage = null;
+let testCanvas = null;
+let testCtx = null;
 let currentImageIndex = 0;
 let classes = [];
 let currentAnnotations = [];
@@ -370,6 +415,13 @@ function showPage(pageName) {
         if (sidebarOverlay) {
             sidebarOverlay.classList.remove('show');
         }
+    }
+    
+    // If navigating to train page, check if we need to unlock fields
+    if (pageName === 'train' && !threeStepSystemEnabled) {
+        setTimeout(() => {
+            setupThreeStepTraining();
+        }, 100);
     }
 }
 
@@ -602,7 +654,9 @@ async function handleDownload(e) {
                 output_dir: tempOutputDir
             });
             
-            const downloadedCount = result?.downloaded || limit;
+            // Handle new return format (object with downloaded and test_downloaded) or old format (number)
+            const downloadedCount = result?.downloaded || result || limit;
+            const testDownloadedCount = result?.test_downloaded || 0;
             
             // Distribute images to folders (15%, 35%, 50%)
             // Use user-selected path if provided, otherwise use default
@@ -636,6 +690,44 @@ async function handleDownload(e) {
                 });
                 
                 console.log('Distribution result:', distributionResult);
+                
+                // Copy FOR_TESTS folder from temp to class folder
+                const tempTestPath = await ipcRenderer.invoke('join-path', [tempOutputDir, 'FOR_TESTS']);
+                const testPathExists = await ipcRenderer.invoke('file-exists', tempTestPath);
+                
+                if (testPathExists && distributionResult && distributionResult.basePath) {
+                    const targetTestPath = await ipcRenderer.invoke('join-path', [distributionResult.basePath, 'FOR_TESTS']);
+                    console.log('Copying FOR_TESTS folder from', tempTestPath, 'to', targetTestPath);
+                    
+                    try {
+                        await ipcRenderer.invoke('copy-folder', {
+                            source: tempTestPath,
+                            destination: targetTestPath
+                        });
+                        console.log('FOR_TESTS folder copied successfully');
+                    } catch (error) {
+                        console.error('Error copying FOR_TESTS folder:', error);
+                        // Don't fail the whole process if test folder copy fails
+                    }
+                } else {
+                    if (!testPathExists) {
+                        console.log('FOR_TESTS folder not found in temp directory:', tempTestPath);
+                    }
+                    if (!distributionResult || !distributionResult.basePath) {
+                        console.log('Distribution failed or basePath not returned');
+                    }
+                }
+                
+                // Clean up temp FOR_TESTS folder after copying
+                if (testPathExists) {
+                    try {
+                        await ipcRenderer.invoke('remove-folder', tempTestPath);
+                        console.log('Temp FOR_TESTS folder cleaned up');
+                    } catch (error) {
+                        console.error('Error cleaning up temp FOR_TESTS folder:', error);
+                        // Don't fail if cleanup fails
+                    }
+                }
                 
                 // Verify that the class folder was created
                 if (distributionResult && distributionResult.basePath) {
@@ -702,15 +794,17 @@ async function handleDownload(e) {
         } else {
             // Normal download
             result = await ipcRenderer.invoke('download-reddit-images', {
-                subreddit,
-                limit,
-                class_name: className,
-                output_dir: outputDir
-            });
-            
+            subreddit,
+            limit,
+            class_name: className,
+            output_dir: outputDir
+        });
+        
             // Update statistics
             incrementDatasets();
-            const downloadedCount = result?.downloaded || limit;
+            // Handle new return format (object with downloaded and test_downloaded) or old format (number)
+            const downloadedCount = result?.downloaded || result || limit;
+            const testDownloadedCount = result?.test_downloaded || 0;
             incrementImages(downloadedCount);
             
             showMessage('msg-download-complete', 'success');
@@ -1198,8 +1292,8 @@ async function saveAnnotation() {
                 navigateImage(1);
             }
         } else {
-            // Move to next
-            navigateImage(1);
+        // Move to next
+        navigateImage(1);
         }
     } catch (e) {
         showMessage(`msg-save-error:${e.message}`, 'danger');
@@ -1242,9 +1336,9 @@ async function handleAutoLabel(autoTriggered = false) {
     
     // Only show spinner if manually triggered
     if (!autoTriggered) {
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     }
 
     try {
@@ -1261,7 +1355,7 @@ async function handleAutoLabel(autoTriggered = false) {
              if (!autoTriggered) {
                  showMessage('msg-no-model-found', 'warning');
                  if (btn) {
-                     btn.disabled = false;
+             btn.disabled = false;
                      btn.innerHTML = '<i class="bi bi-magic"></i> Auto';
                  }
              }
@@ -1313,7 +1407,7 @@ async function handleAutoLabel(autoTriggered = false) {
                 if (currentAnnotations.length > 0 && !autoTriggered) {
                     if (!confirm(`Found ${newAnnotations.length} objects. Replace existing annotations?`)) {
                         if (btn && !autoTriggered) {
-                            btn.disabled = false;
+                        btn.disabled = false;
                             btn.innerHTML = '<i class="bi bi-magic"></i> Auto';
                         }
                         return;
@@ -1342,13 +1436,16 @@ async function handleAutoLabel(autoTriggered = false) {
         }
     } finally {
         if (btn && !autoTriggered) {
-            btn.disabled = false;
+        btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-magic"></i> Auto';
         }
     }
 }
 
 function navigateImage(direction) {
+    // Clear current annotations before navigating to prevent them from being carried over
+    currentAnnotations = [];
+    
     const newIndex = currentImageIndex + direction;
     if (newIndex >= 0 && newIndex < images.length) {
         loadImage(newIndex);
@@ -1398,21 +1495,21 @@ async function startTraining() {
         imgSize = 640;
     } else {
         // Normal flow
-        // Auto-fill path if empty and we have a current one
-        if (trainDatasetPath && !trainDatasetPath.value && currentDatasetPath) {
-            trainDatasetPath.value = currentDatasetPath;
-        }
-        
+    // Auto-fill path if empty and we have a current one
+    if (trainDatasetPath && !trainDatasetPath.value && currentDatasetPath) {
+        trainDatasetPath.value = currentDatasetPath;
+    }
+    
         datasetPath = trainDatasetPath ? trainDatasetPath.value.trim() : currentDatasetPath;
-        
-        if (!datasetPath) {
+    
+    if (!datasetPath) {
             showMessage('msg-select-dataset', 'warning');
-            return;
-        }
-        
-        const epochsInput = document.getElementById('epochs');
-        const batchInput = document.getElementById('batch-size');
-        const imgSizeInput = document.getElementById('img-size');
+        return;
+    }
+    
+    const epochsInput = document.getElementById('epochs');
+    const batchInput = document.getElementById('batch-size');
+    const imgSizeInput = document.getElementById('img-size');
         
         epochs = parseInt(epochsInput ? epochsInput.value : 50) || 50;
         batchSize = parseInt(batchInput ? batchInput.value : 16) || 16;
@@ -1466,8 +1563,8 @@ async function startTraining() {
                             await ipcRenderer.invoke('get-default-datasets-path'),
                             '..', 'models', 'custom_model', 'weights', 'best.pt'
                         ]);
-                    }
-                } catch (e) {
+        }
+    } catch (e) {
                     console.error('Error getting model path:', e);
                 }
                 setTimeout(() => {
@@ -1563,35 +1660,154 @@ window.useBaseModel = async function() {
     }
 };
 
-window.selectTestImage = async function() {
-    const path = await ipcRenderer.invoke('select-file', [
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }
-    ]);
-    if (path) {
-        document.getElementById('test-image-path').value = path;
+// Test Model Functions - New Interface
+async function handleLoadTestFolder() {
+    const selectedPath = await ipcRenderer.invoke('select-dataset-folder');
+    if (selectedPath) {
+        await loadTestDataset(selectedPath);
+    }
+}
+
+async function loadTestDataset(datasetPath) {
+    testDatasetPath = datasetPath;
+    
+    // Load images from folder
+    testImages = await ipcRenderer.invoke('load-dataset', datasetPath);
+    testCurrentImageIndex = 0;
+    
+    const testImageCounter = document.getElementById('test-image-counter');
+    if (testImageCounter) {
+        testImageCounter.textContent = `0 / ${testImages.length}`;
+    }
+    
+    if (testImages.length > 0) {
+        await loadTestImage(0);
+        showMessage(`msg-images-loaded:${testImages.length}`, 'success');
+    } else {
+        showMessage('msg-no-images-found', 'warning');
+    }
+    
+    updateTestNavigationButtons();
+}
+
+async function loadTestImage(index) {
+    if (index < 0 || index >= testImages.length) return;
+    
+    testCurrentImageIndex = index;
+    
+    // Update header counter
+    const testImageCounter = document.getElementById('test-image-counter');
+    const testCurrentFileName = document.getElementById('test-current-file-name');
+    
+    if (testImageCounter) {
+        testImageCounter.textContent = `${index + 1} / ${testImages.length}`;
+    }
+    
+    updateTestNavigationButtons();
+    
+    // Determine path based on folder structure
+    const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
+    
+    let imagePath;
+    if (hasImagesSubdir) {
+        imagePath = path.join(testDatasetPath, 'images', testImages[index]);
+        const existsInSub = await ipcRenderer.invoke('file-exists', imagePath);
+        if (!existsInSub) {
+            imagePath = path.join(testDatasetPath, testImages[index]);
+        }
+    } else {
+        imagePath = path.join(testDatasetPath, testImages[index]);
+    }
+    
+    if (testCurrentFileName) {
+        testCurrentFileName.textContent = testImages[index];
+    }
+    
+    // Load image
+    testCurrentImage = new Image();
+    const fileUrl = 'file://' + imagePath.replace(/\\/g, '/');
+    testCurrentImage.src = fileUrl;
+    
+    testCurrentImage.onload = async () => {
+        // Hide placeholder
+        const placeholderText = document.getElementById('test-placeholder-text');
+        if (placeholderText) {
+            placeholderText.style.display = 'none';
+        }
+        
+        // Get canvas
+        if (!testCanvas) {
+            testCanvas = document.getElementById('test-canvas');
+            testCtx = testCanvas.getContext('2d');
+        }
+        
+        // Get container dimensions
+        const container = document.getElementById('test-container');
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+        
+        // Calculate scale to fit image within container
+        let scale = Math.min(containerWidth / testCurrentImage.width, containerHeight / testCurrentImage.height);
+        scale = scale * 0.95; // Use 95% of available space
+        
+        const displayWidth = testCurrentImage.width * scale;
+        const displayHeight = testCurrentImage.height * scale;
+        
+        // Set canvas size
+        testCanvas.width = displayWidth;
+        testCanvas.height = displayHeight;
+        
+        // Draw image
+        testCtx.clearRect(0, 0, testCanvas.width, testCanvas.height);
+        testCtx.drawImage(testCurrentImage, 0, 0, displayWidth, displayHeight);
+        
+        // Auto-run prediction if model is selected
+        const modelPath = document.getElementById('test-model-path')?.value;
+        if (modelPath) {
+            await runTestPrediction(imagePath);
+        }
+    };
+    
+    testCurrentImage.onerror = () => {
+        console.error('Failed to load test image:', fileUrl);
+        showMessage('msg-image-load-error', 'danger');
+    };
+}
+
+function updateTestNavigationButtons() {
+    const prevBtn = document.getElementById('btn-test-prev');
+    const nextBtn = document.getElementById('btn-test-next');
+    
+    if (prevBtn) {
+        prevBtn.style.display = testCurrentImageIndex > 0 ? 'block' : 'none';
+    }
+    if (nextBtn) {
+        nextBtn.style.display = testCurrentImageIndex < testImages.length - 1 ? 'block' : 'none';
+    }
+}
+
+window.navigateTestImage = async function(direction) {
+    const newIndex = testCurrentImageIndex + direction;
+    if (newIndex >= 0 && newIndex < testImages.length) {
+        await loadTestImage(newIndex);
     }
 };
 
-window.runPrediction = async function() {
-    const modelPath = document.getElementById('test-model-path').value;
-    const imagePath = document.getElementById('test-image-path').value;
-    const confThreshold = document.getElementById('conf-threshold').value;
-    
-    const resultImg = document.getElementById('test-result-image');
-    const placeholder = document.getElementById('test-result-placeholder');
-    const spinner = document.getElementById('prediction-spinner');
-    const logsDiv = document.getElementById('prediction-logs');
-    
-    if (!modelPath || !imagePath) {
-        showMessage('msg-select-model-image', 'warning');
-        return;
+async function runTestPrediction(imagePath) {
+    const modelPath = document.getElementById('test-model-path')?.value;
+    if (!modelPath) {
+        return; // No model selected, just show image
     }
     
-    // UI Loading state
-    resultImg.style.display = 'none';
-    placeholder.style.display = 'none';
-    spinner.style.display = 'block';
+    const confThreshold = document.getElementById('test-conf-threshold')?.value || 0.25;
+    const spinner = document.getElementById('test-prediction-spinner');
+    const logsDiv = document.getElementById('test-prediction-logs');
+    const infoDiv = document.getElementById('test-prediction-info');
+    
+    // Show spinner
+    if (spinner) spinner.style.display = 'block';
     if (logsDiv) logsDiv.style.display = 'none';
+    if (infoDiv) infoDiv.style.display = 'none';
     
     try {
         const result = await ipcRenderer.invoke('predict-image', { 
@@ -1601,51 +1817,140 @@ window.runPrediction = async function() {
         });
         
         if (result.success && result.resultPath) {
-            // Append a timestamp to bypass cache
-            const cacheBuster = `?t=${new Date().getTime()}`;
-            // Use file:// protocol explicitly for Electron
-            resultImg.src = `file://${result.resultPath}${cacheBuster}`;
-            resultImg.style.display = 'block';
-            spinner.style.display = 'none';
-            showMessage('msg-prediction-complete', 'success');
+            // Load result image
+            const resultImg = new Image();
+            const fileUrl = 'file://' + result.resultPath.replace(/\\/g, '/');
+            resultImg.src = fileUrl;
+            
+            resultImg.onload = () => {
+                // Get container dimensions
+                const container = document.getElementById('test-container');
+                const containerWidth = container.clientWidth;
+                const containerHeight = container.clientHeight;
+                
+                // Calculate scale
+                let scale = Math.min(containerWidth / resultImg.width, containerHeight / resultImg.height);
+                scale = scale * 0.95;
+                
+                const displayWidth = resultImg.width * scale;
+                const displayHeight = resultImg.height * scale;
+                
+                // Set canvas size and draw
+                testCanvas.width = displayWidth;
+                testCanvas.height = displayHeight;
+                testCtx.clearRect(0, 0, testCanvas.width, testCanvas.height);
+                testCtx.drawImage(resultImg, 0, 0, displayWidth, displayHeight);
+                
+                // Hide spinner
+                if (spinner) spinner.style.display = 'none';
+                
+                // Show detection info
+                if (result.detections && result.detections.length > 0) {
+                    const detectionsCount = document.getElementById('test-detections-count');
+                    if (detectionsCount) {
+                        detectionsCount.textContent = result.detections.length;
+                    }
+                    if (infoDiv) {
+                        infoDiv.style.display = 'block';
+                    }
             
             // Show logs
             if (logsDiv) {
-                // Filter output for "Detected:" lines or "No detections"
-                const lines = result.output.split('\n')
-                    .filter(line => line.includes('Detected:') || line.includes('No detections'))
-                    .join('<br>');
-                
-                if (lines) {
-                    logsDiv.innerHTML = lines;
+                        const detectionLines = result.detections.map(d => 
+                            `${d.class_name} (${(d.confidence * 100).toFixed(1)}%)`
+                        ).join('<br>');
+                        logsDiv.innerHTML = detectionLines;
                     logsDiv.style.display = 'block';
-                    logsDiv.className = lines.includes('No detections') ? 
-                        'mt-3 p-3 bg-black border border-warning text-warning rounded font-monospace small' :
-                        'mt-3 p-3 bg-black border border-success text-success rounded font-monospace small';
+                        logsDiv.className = 'text-success';
+                    }
                 } else {
-                    // Fallback if output format is unexpected
-                    logsDiv.innerHTML = 'Prediction finished. (No detection details)';
+                    if (infoDiv) {
+                        const detectionsCount = document.getElementById('test-detections-count');
+                        if (detectionsCount) detectionsCount.textContent = '0';
+                        infoDiv.style.display = 'block';
+                    }
+                    if (logsDiv) {
+                        logsDiv.innerHTML = 'No detections found';
                     logsDiv.style.display = 'block';
-                    logsDiv.className = 'mt-3 p-3 bg-black border border-secondary text-white rounded font-monospace small';
+                        logsDiv.className = 'text-warning';
+                    }
                 }
-            }
+            };
+            
+            resultImg.onerror = () => {
+                console.error('Failed to load prediction result');
+                if (spinner) spinner.style.display = 'none';
+            };
         } else {
             throw new Error('No result path returned.');
         }
     } catch (e) {
-        console.error(e);
-        spinner.style.display = 'none';
-        placeholder.style.display = 'block';
-        placeholder.innerHTML = `<i class="bi bi-exclamation-triangle fs-1 text-danger mb-2"></i><br>Error: ${e.message}`;
-        showMessage(`msg-prediction-failed:${e.message}`, 'danger');
-        
+        console.error('Prediction error:', e);
+        if (spinner) spinner.style.display = 'none';
         if (logsDiv) {
             logsDiv.innerHTML = `Error: ${e.message}`;
             logsDiv.style.display = 'block';
-            logsDiv.className = 'mt-3 p-3 bg-black border border-danger text-danger rounded font-monospace small';
+            logsDiv.className = 'text-danger';
+        }
+    }
+}
+
+// Update selectModelFile to trigger prediction if image is loaded
+window.selectModelFile = async function() {
+    const filePath = await ipcRenderer.invoke('select-file', [
+        { name: 'YOLO Model', extensions: ['pt'] }
+    ]);
+    if (filePath) {
+        const modelPathInput = document.getElementById('test-model-path');
+        if (modelPathInput) {
+            modelPathInput.value = filePath;
+            // If we have a loaded image, run prediction
+            if (testCurrentImageIndex >= 0 && testImages.length > 0) {
+                const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
+                let imagePath;
+                if (hasImagesSubdir) {
+                    imagePath = path.join(testDatasetPath, 'images', testImages[testCurrentImageIndex]);
+                    const existsInSub = await ipcRenderer.invoke('file-exists', imagePath);
+                    if (!existsInSub) {
+                        imagePath = path.join(testDatasetPath, testImages[testCurrentImageIndex]);
+                    }
+                } else {
+                    imagePath = path.join(testDatasetPath, testImages[testCurrentImageIndex]);
+                }
+                await runTestPrediction(imagePath);
+            }
         }
     }
 };
+
+window.useBaseModel = async function() {
+    const basePath = await ipcRenderer.invoke('get-base-model-path');
+    if (basePath) {
+        const modelPathInput = document.getElementById('test-model-path');
+        if (modelPathInput) {
+            modelPathInput.value = basePath;
+            showMessage('msg-base-model-selected', 'info');
+            // If we have a loaded image, run prediction
+            if (testCurrentImageIndex >= 0 && testImages.length > 0) {
+                const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
+                let imagePath;
+                if (hasImagesSubdir) {
+                    imagePath = path.join(testDatasetPath, 'images', testImages[testCurrentImageIndex]);
+                    const existsInSub = await ipcRenderer.invoke('file-exists', imagePath);
+                    if (!existsInSub) {
+                        imagePath = path.join(testDatasetPath, testImages[testCurrentImageIndex]);
+                    }
+                } else {
+                    imagePath = path.join(testDatasetPath, testImages[testCurrentImageIndex]);
+                }
+                await runTestPrediction(imagePath);
+            }
+        }
+    }
+};
+
+// Make handleLoadTestFolder global
+window.handleLoadTestFolder = handleLoadTestFolder;
 
 // Admin Mode Functions
 function setupAdminModeToggle() {
@@ -1696,6 +2001,9 @@ function loadAdminModeState() {
             adminContainer.style.display = 'block';
         }
     }
+    
+    // Note: updateThreeStepSystemUI() will be called after loadThreeStepSystemState()
+    // to ensure both states are loaded before updating UI
 }
 
 // Three-Step System Functions
@@ -1719,6 +2027,28 @@ function updateThreeStepSystemUI() {
         } else {
             limitInput.disabled = false;
             limitInput.style.opacity = '1';
+        }
+    }
+    
+    // Update train page - unlock fields if 3-step system is disabled
+    if (!threeStepSystemEnabled) {
+        const datasetPathInput = document.getElementById('train-dataset-path');
+        const selectBtn = document.getElementById('btn-select-train-dataset');
+        const batchSizeInput = document.getElementById('batch-size');
+        const imageSizeInput = document.getElementById('image-size');
+        
+        if (datasetPathInput) {
+            datasetPathInput.readOnly = false;
+            datasetPathInput.value = '';
+        }
+        if (selectBtn) {
+            selectBtn.disabled = false;
+        }
+        if (batchSizeInput) {
+            batchSizeInput.disabled = false;
+        }
+        if (imageSizeInput) {
+            imageSizeInput.disabled = false;
         }
     }
 }
@@ -1755,7 +2085,7 @@ function setThreeStepBasePath(basePath) {
 }
 
 // Load three-step system state on init
-function loadThreeStepSystemState() {
+async function loadThreeStepSystemState() {
     threeStepSystemEnabled = localStorage.getItem('yolo_three_step_enabled') === 'true';
     threeStepStage = getThreeStepStage();
     threeStepClassName = getThreeStepClassName();
@@ -1769,11 +2099,38 @@ function loadThreeStepSystemState() {
     
     updateThreeStepSystemUI();
     
-    // If in three-step mode and on annotate page, setup
-    if (threeStepSystemEnabled && threeStepBasePath) {
+    // If three-step system is enabled and we have state, restore the workflow
+    if (threeStepSystemEnabled && threeStepBasePath && threeStepClassName) {
+        console.log('Restoring three-step system state:', {
+            stage: threeStepStage,
+            className: threeStepClassName,
+            basePath: threeStepBasePath
+        });
+        
+        // Restore to appropriate page based on stage
+        // Stages 1, 2, 3 = annotation pages
+        // Stages 1.5, 2.5, 3.5 = training pages
+        const stageNum = parseFloat(threeStepStage);
+        if (stageNum === 1 || stageNum === 2 || stageNum === 3) {
+            // Annotation stage - go to annotate page
+            showPage('annotate');
+            // Wait for page to be ready, then setup
+            setTimeout(async () => {
+                await setupThreeStepAnnotation();
+            }, 300);
+        } else if (stageNum === 1.5 || stageNum === 2.5 || stageNum === 3.5) {
+            // Training stage - go to train page
+            showPage('train');
+            // Wait for page to be ready, then setup
+            setTimeout(async () => {
+                await setupThreeStepTraining();
+            }, 300);
+        }
+    } else if (threeStepSystemEnabled && threeStepBasePath) {
+        // If on annotate page and three-step is enabled, setup
         const annotatePage = document.getElementById('page-annotate');
         if (annotatePage && annotatePage.classList.contains('active')) {
-            setupThreeStepAnnotation();
+            await setupThreeStepAnnotation();
         }
     }
 }
@@ -1928,7 +2285,32 @@ async function proceedToNextThreeStepStage() {
 }
 
 async function setupThreeStepTraining() {
-    if (!threeStepSystemEnabled) return;
+    if (!threeStepSystemEnabled) {
+        // If 3-step system is disabled, unlock all fields
+        const datasetPathInput = document.getElementById('train-dataset-path');
+        const selectBtn = document.getElementById('btn-select-train-dataset');
+        const batchSizeInput = document.getElementById('batch-size');
+        const imageSizeInput = document.getElementById('img-size');
+        
+        if (datasetPathInput) {
+            datasetPathInput.readOnly = false;
+            datasetPathInput.disabled = false;
+            datasetPathInput.style.opacity = '1';
+        }
+        if (selectBtn) {
+            selectBtn.disabled = false;
+            selectBtn.style.opacity = '1';
+        }
+        if (batchSizeInput) {
+            batchSizeInput.disabled = false;
+            batchSizeInput.style.opacity = '1';
+        }
+        if (imageSizeInput) {
+            imageSizeInput.disabled = false;
+            imageSizeInput.style.opacity = '1';
+        }
+        return;
+    }
     
     // Reload state from localStorage to ensure we have latest values
     threeStepBasePath = getThreeStepBasePath();

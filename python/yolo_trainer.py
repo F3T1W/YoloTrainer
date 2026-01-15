@@ -5,6 +5,8 @@ import yaml
 from ultralytics import YOLO
 import shutil
 import random
+from datetime import datetime
+import torch
 
 def create_yolo_dataset_structure(dataset_path, classes):
     """
@@ -101,14 +103,27 @@ def split_dataset(raw_path, dataset_path, train_ratio=0.8):
     for img in val_images:
         copy_pair(img, 'val')
 
-def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir):
+def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir, device='auto', workers=8):
     """
-    Train YOLOv8 model
+    Train YOLOv8 model with platform-specific optimizations
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"Starting training for {epochs} epochs...", flush=True)
+    # Detect and configure device
+    if device == 'auto':
+        if torch.backends.mps.is_available():
+            device = 'mps'
+            print("Apple Silicon (MPS) detected! Using Metal Performance Shaders for acceleration.", flush=True)
+        elif torch.cuda.is_available():
+            device = 'cuda'
+            print("CUDA GPU detected! Using GPU acceleration.", flush=True)
+        else:
+            device = 'cpu'
+            print("Using CPU for training.", flush=True)
+    
+    print(f"Starting training for {epochs} epochs on {device}...", flush=True)
+    print(f"Batch size: {batch_size}, Image size: {img_size}, Workers: {workers}", flush=True)
     
     # Load model (pretrained or resume)
     if 'last.pt' in str(data_yaml) or str(data_yaml).endswith('.pt'):
@@ -141,20 +156,37 @@ def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir):
         print("Falling back to yolov8n.pt...", flush=True)
         model = YOLO('yolov8n.pt')
     
-    # Train
+    # Train with platform-specific optimizations
     # We set resume=False explicitly to start a new session (Epoch 1)
     try:
-        results = model.train(
-            data=str(data_yaml),
-            epochs=epochs,
-            batch=batch_size,
-            imgsz=img_size,
-            project=str(output_dir),
-            name='custom_model',
-            exist_ok=True,
-            verbose=True,
-            resume=False
-        )
+        train_kwargs = {
+            'data': str(data_yaml),
+            'epochs': epochs,
+            'batch': batch_size,
+            'imgsz': img_size,
+            'project': str(output_dir),
+            'name': 'custom_model',
+            'exist_ok': True,
+            'verbose': True,
+            'resume': False,
+            'workers': workers,
+            'device': device
+        }
+        
+        # Apple Silicon optimizations
+        if device == 'mps':
+            # Use mixed precision training for better performance on Apple Silicon
+            train_kwargs['amp'] = True  # Automatic Mixed Precision
+            # Optimize for unified memory architecture
+            train_kwargs['half'] = False  # MPS doesn't support FP16 yet, but AMP helps
+            print("Using mixed precision training (AMP) for Apple Silicon optimization.", flush=True)
+        
+        # CUDA optimizations
+        elif device == 'cuda':
+            train_kwargs['amp'] = True  # Mixed precision for CUDA too
+            train_kwargs['half'] = False
+        
+        results = model.train(**train_kwargs)
     except Exception as e:
         print(f"\nTraining failed: {e}", flush=True)
         raise e
@@ -162,6 +194,37 @@ def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir):
     # Export best model
     best_model = output_dir / 'custom_model' / 'weights' / 'best.pt'
     print(f"Training complete! Best model saved at: {best_model}", flush=True)
+    
+    # Also save a copy with unique name (timestamp + classes) for history
+    if best_model.exists():
+        # Create models_history directory
+        history_dir = output_dir / 'models_history'
+        history_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename: YYYYMMDD_HHMMSS_classes.pt
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # Get class names from data_yaml if available
+        class_suffix = ''
+        try:
+            if isinstance(data_yaml, (str, Path)):
+                with open(data_yaml, 'r') as f:
+                    data = yaml.safe_load(f)
+                    if 'names' in data:
+                        classes = data['names']
+                        # Create short class name (first 3 classes or first 20 chars)
+                        if isinstance(classes, list):
+                            class_suffix = '_' + '_'.join([c[:10] for c in classes[:3]]).replace(' ', '_')
+                        elif isinstance(classes, dict):
+                            class_suffix = '_' + '_'.join([str(v)[:10] for v in list(classes.values())[:3]]).replace(' ', '_')
+        except:
+            pass
+        
+        unique_name = f"{timestamp}{class_suffix}.pt"
+        history_model = history_dir / unique_name
+        
+        # Copy best model to history
+        shutil.copy2(best_model, history_model)
+        print(f"Model saved to history: {history_model}", flush=True)
     
     return best_model
 
@@ -173,6 +236,8 @@ if __name__ == "__main__":
     parser.add_argument('--img', type=int, default=640)
     parser.add_argument('--output', required=True)
     parser.add_argument('--class-names', required=True, help='Comma separated class names')
+    parser.add_argument('--device', type=str, default='auto', help='Device: auto, mps, cuda, or cpu')
+    parser.add_argument('--workers', type=int, default=8, help='Number of data loading workers')
     
     args = parser.parse_args()
     
@@ -194,5 +259,6 @@ if __name__ == "__main__":
     # Split dataset
     split_dataset(args.data, dataset_path)
     
-    # Train
-    train_yolo_model(yaml_path, args.epochs, args.batch, args.img, args.output)
+    # Train with device and workers parameters
+    train_yolo_model(yaml_path, args.epochs, args.batch, args.img, args.output, 
+                     device=args.device, workers=args.workers)

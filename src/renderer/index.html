@@ -825,7 +825,7 @@
                 <small class="text-white">Trainer</small>
             </div>
         </div>
-        <nav class="nav flex-column mt-3">
+        <nav class="nav flex-column mt-3" style="flex: 1; overflow-y: auto;">
             <a class="nav-link active" onclick="showPage('home')">
                 <i class="bi bi-house-door"></i> <span data-i18n="nav-home">Home</span>
             </a>
@@ -848,6 +848,34 @@
                 <i class="bi bi-gear"></i> <span data-i18n="nav-settings">Settings</span>
             </a>
         </nav>
+        
+        <!-- Update Notification -->
+        <div id="update-notification" class="update-notification" style="display: none;">
+            <div class="update-notification-content">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-download text-primary me-2"></i>
+                    <strong class="text-white" data-i18n="update-available-title">Update Available</strong>
+                    <button type="button" class="btn-close btn-close-white ms-auto" onclick="dismissUpdateNotification()" aria-label="Close"></button>
+                </div>
+                <div class="text-white small mb-2">
+                    <span data-i18n="update-version">Version</span> <span id="update-version-text"></span> <span data-i18n="update-is-available">is available</span>
+                </div>
+                <div id="update-progress" style="display: none;" class="mb-2">
+                    <div class="progress" style="height: 6px;">
+                        <div id="update-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-white-50" data-i18n="update-downloading">Downloading...</small>
+                </div>
+                <div id="update-actions" class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm flex-fill" onclick="downloadUpdate()" data-i18n="update-download">
+                        <i class="bi bi-download me-1"></i>Download
+                    </button>
+                    <button id="update-install-btn" class="btn btn-success btn-sm flex-fill" onclick="installUpdate()" style="display: none;" data-i18n="update-install">
+                        <i class="bi bi-check-circle me-1"></i>Install & Restart
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Main Content -->
@@ -910,7 +938,6 @@
                                         <input class="form-check-input" type="checkbox" id="three-step-system" onchange="toggleThreeStepSystem(this.checked)">
                                         <label class="form-check-label text-white" for="three-step-system" data-i18n="home-three-step">3-Step System</label>
                                     </div>
-                                    <small class="text-muted d-block mt-2" data-i18n="home-three-step-desc">Simplified workflow for beginners</small>
                                 </div>
                                 
                                 <!-- Admin Checkbox (hidden by default) -->
@@ -919,7 +946,6 @@
                                         <input class="form-check-input" type="checkbox" id="admin-check" onchange="toggleAdminMode(this.checked)">
                                         <label class="form-check-label text-white" for="admin-check" data-i18n="home-admin-check">Admin Check</label>
                                     </div>
-                                    <small class="text-muted d-block mt-2" data-i18n="home-admin-check-desc">Use 100 images instead of 1000 for testing</small>
                                 </div>
                                 <div class="text-center p-3">
                                     <i class="bi bi-reddit fs-1 text-danger mb-3"></i>
@@ -1198,61 +1224,81 @@
 
         <!-- Test Model Page -->
         <div id="page-test" class="page-container">
-            <div class="content-wrapper centered">
-                <div class="row h-100 g-4">
-                    <div class="col-lg-12">
-                         <div class="card h-100">
-                             <div class="card-header text-center py-3">
-                                 <h3 class="mb-0 text-white"><i class="bi bi-crosshair me-2"></i><span data-i18n="test-title">Test Model</span></h3>
-                             </div>
-                             <div class="card-body p-4 d-flex flex-column">
-                                 <form id="test-form" class="row g-3">
-                                     <div class="col-md-6">
-                                         <label class="form-label text-white" data-i18n="test-model-path">Model Path</label>
-                                         <div class="input-group">
-                                             <input type="text" class="form-control" id="test-model-path" readonly value="models/custom_model/weights/best.pt">
-                                             <button class="btn btn-secondary" type="button" onclick="selectModelFile()" data-i18n="test-select-pt">Select .pt</button>
-                                             <button class="btn btn-outline-info" type="button" onclick="useBaseModel()" title="Use standard YOLOv8n (detects 80 common classes)" data-i18n="test-base">
-                                                 <i class="bi bi-box-seam"></i> Base
-                                             </button>
-                                         </div>
-                                     </div>
-                                     <div class="col-md-6">
-                                         <label class="form-label text-white" data-i18n="test-image">Image to Test</label>
-                                         <div class="input-group">
-                                             <input type="text" class="form-control" id="test-image-path" readonly data-i18n-placeholder="test-select-image" placeholder="Select an image...">
-                                             <button class="btn btn-secondary" type="button" onclick="selectTestImage()" data-i18n="test-select-image">Select Image</button>
-                                         </div>
-                                     </div>
-                                     <div class="col-md-12">
-                                         <label class="form-label text-white d-flex justify-content-between">
-                                             <span data-i18n="test-confidence">Confidence Threshold</span>
-                                             <span id="conf-value">0.25</span>
-                                         </label>
-                                         <input type="range" class="form-range" id="conf-threshold" min="0.01" max="1.0" step="0.01" value="0.25" oninput="document.getElementById('conf-value').innerText = this.value">
-                                     </div>
-                                     <div class="col-12 text-center mt-3">
-                                         <button type="button" class="btn btn-primary px-5" onclick="runPrediction()">
-                                             <i class="bi bi-play-fill me-2"></i><span data-i18n="test-run">Run Prediction</span>
-                                         </button>
-                                     </div>
-                                 </form>
-                                 
-                                 <div class="flex-grow-1 mt-4 position-relative d-flex justify-content-center align-items-center bg-black border border-secondary rounded overflow-hidden" style="min-height: 400px;">
-                                     <div id="test-result-placeholder" class="text-white text-center" data-i18n="test-placeholder" style="font-size: 1.25rem; font-weight: 500; opacity: 1;">
-                                         <i class="bi bi-image fs-1 d-block text-center text-white mb-3"></i>
-                                         Result will appear here
-                                     </div>
-                                     <img id="test-result-image" src="" style="max-width: 100%; max-height: 100%; display: none; object-fit: contain;">
-                                     <div id="prediction-spinner" class="spinner-border text-primary position-absolute" role="status" style="display: none;">
-                                         <span class="visually-hidden">Loading...</span>
-                                     </div>
-                                 </div>
-                                 <div id="prediction-logs" class="mt-3 p-3 bg-black border border-secondary rounded font-monospace small" style="display: none; max-height: 150px; overflow-y: auto;"></div>
-                             </div>
-                         </div>
+            <div class="content-wrapper" style="height: 100%;">
+            <!-- Top Controls -->
+            <div class="card mb-3 w-100 flex-shrink-0">
+                <div class="card-body py-2">
+                    <div class="row align-items-center g-2">
+                        <div class="col-md-3">
+                            <button class="btn btn-secondary w-100 btn-sm" id="btn-load-test-folder" onclick="handleLoadTestFolder()" data-i18n="test-load-folder">
+                                <i class="bi bi-folder2-open me-1"></i>Load Test Folder
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control bg-dark text-white border-secondary" id="test-model-path" readonly placeholder="Select model..." value="">
+                                <button class="btn btn-outline-secondary" type="button" onclick="selectModelFile()" data-i18n="test-select-pt">
+                                    <i class="bi bi-file-earmark-code"></i> .pt
+                                </button>
+                                <button class="btn btn-outline-info" type="button" onclick="useBaseModel()" title="Use standard YOLOv8n (detects 80 common classes)" data-i18n="test-base">
+                                    <i class="bi bi-box-seam"></i> Base
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-dark text-white border-secondary" title="Confidence Threshold" data-i18n="test-conf">Conf</span>
+                                <input type="number" class="form-control bg-dark text-white border-secondary" id="test-conf-threshold" value="0.25" min="0.01" max="1.0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-end">
+                             <span class="text-white small me-2" id="test-image-counter">0 / 0</span>
+                             <span class="badge bg-danger text-truncate" style="max-width: 80px;" id="test-current-file-name" data-i18n="test-no-file">No file</span>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Main Canvas Area (Fills space) -->
+            <div id="test-container" style="position: relative; flex: 1; min-height: 0; background: #000; border: 1px solid #495057; border-radius: 0.375rem; overflow: hidden;">
+                <canvas id="test-canvas" style="display: block; max-width: 100%; max-height: 100%; margin: auto;"></canvas>
+                <div class="text-white text-center" id="test-placeholder-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; font-size: 1.25rem; font-weight: 500; opacity: 1;" data-i18n="test-placeholder">
+                    <i class="bi bi-image fs-1 d-block mb-3"></i>
+                    Load a test folder and select a model to start
+                </div>
+                
+                <!-- Floating Navigation Buttons -->
+                <button class="btn btn-dark rounded-circle shadow-lg position-absolute start-0 top-50 translate-middle-y ms-3" 
+                        id="btn-test-prev" 
+                        style="width: 50px; height: 50px; z-index: 100; opacity: 0.6; display: none;"
+                        onclick="navigateTestImage(-1)"
+                        title="Previous Image (Left Arrow)">
+                    <i class="bi bi-chevron-left fs-4"></i>
+                </button>
+
+                <button class="btn btn-primary rounded-circle shadow-lg position-absolute end-0 top-50 translate-middle-y me-3" 
+                        id="btn-test-next" 
+                        style="width: 50px; height: 50px; z-index: 100; opacity: 0.8; display: none;"
+                        onclick="navigateTestImage(1)"
+                        title="Next Image (Right Arrow)">
+                    <i class="bi bi-chevron-right fs-4"></i>
+                </button>
+                
+                <!-- Prediction Spinner -->
+                <div id="test-prediction-spinner" class="spinner-border text-primary position-absolute top-50 start-50 translate-middle" role="status" style="display: none; z-index: 200;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Bottom Info -->
+            <div class="card mt-3 w-100 flex-shrink-0">
+                <div class="card-body py-3">
+                    <div id="test-prediction-logs" class="font-monospace small" style="display: none; max-height: 100px; overflow-y: auto;"></div>
+                    <div id="test-prediction-info" class="text-white small" style="display: none;">
+                        <span data-i18n="test-detections">Detections:</span> <span id="test-detections-count">0</span>
+                    </div>
+                </div>
+            </div>
             </div>
         </div>
 
@@ -1276,6 +1322,43 @@
                                             <option value="ja">日本語</option>
                                             <option value="uz">O'zbek</option>
                                         </select>
+                                    </div>
+                                </div>
+
+                                <!-- Python Environment Setup -->
+                                <div class="mb-5">
+                                    <h5 class="text-white mb-3"><i class="bi bi-code-slash me-2"></i><span data-i18n="settings-python">Python Environment</span></h5>
+                                    <div class="card bg-dark border-secondary mb-3">
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <span class="text-white" data-i18n="settings-python-status">Python Status:</span>
+                                                    <span id="python-status" class="badge bg-secondary" data-i18n="settings-python-checking">Checking...</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <span class="text-white" data-i18n="settings-venv-status">Virtual Environment:</span>
+                                                    <span id="venv-status" class="badge bg-secondary" data-i18n="settings-venv-checking">Checking...</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="text-white" data-i18n="settings-packages-status">Packages:</span>
+                                                    <span id="packages-status" class="badge bg-secondary" data-i18n="settings-packages-checking">Checking...</span>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-2 flex-wrap">
+                                                <button class="btn btn-primary btn-sm" onclick="checkPythonStatus()" data-i18n="settings-check-python">
+                                                    <i class="bi bi-search me-1"></i>Check Python
+                                                </button>
+                                                <button class="btn btn-success btn-sm" onclick="setupPythonEnvironment()" data-i18n="settings-setup-python">
+                                                    <i class="bi bi-download me-1"></i>Setup Environment
+                                                </button>
+                                                <button class="btn btn-info btn-sm" onclick="installPackages()" data-i18n="settings-install-packages">
+                                                    <i class="bi bi-box-seam me-1"></i>Install Packages
+                                                </button>
+                                            </div>
+                                            <div id="python-setup-log" class="mt-3 p-3 bg-black border border-secondary rounded font-monospace small" style="max-height: 200px; overflow-y: auto; display: none;">
+                                                <div class="text-white">Python setup log will appear here...</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1353,6 +1436,260 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="annotation.js"></script>
     <script>
+        // Update notification functions
+        // Use the same ipcRenderer from annotation.js if available, otherwise get new one
+        let updateIpcRenderer;
+        try {
+            if (typeof require !== 'undefined') {
+                updateIpcRenderer = require('electron').ipcRenderer;
+            }
+        } catch (e) {
+            console.error('Could not load ipcRenderer for updates:', e);
+        }
+        
+        // Listen for update events
+        updateIpcRenderer.on('update-available', (event, info) => {
+            showUpdateNotification(info);
+        });
+        
+        updateIpcRenderer.on('update-download-progress', (event, progress) => {
+            updateDownloadProgress(progress.percent);
+        });
+        
+        updateIpcRenderer.on('update-downloaded', (event, info) => {
+            showUpdateReady(info);
+        });
+        
+        updateIpcRenderer.on('update-error', (event, error) => {
+            console.error('Update error:', error);
+            // Optionally show error to user
+        });
+        
+        function showUpdateNotification(info) {
+            const notification = document.getElementById('update-notification');
+            const versionText = document.getElementById('update-version-text');
+            const downloadBtn = notification.querySelector('[onclick="downloadUpdate()"]');
+            
+            if (notification && versionText) {
+                versionText.textContent = info.version;
+                notification.style.display = 'block';
+                downloadBtn.style.display = 'block';
+                document.getElementById('update-install-btn').style.display = 'none';
+                document.getElementById('update-progress').style.display = 'none';
+            }
+        }
+        
+        function updateDownloadProgress(percent) {
+            const progressBar = document.getElementById('update-progress-bar');
+            const progressContainer = document.getElementById('update-progress');
+            
+            if (progressBar && progressContainer) {
+                progressContainer.style.display = 'block';
+                progressBar.style.width = percent + '%';
+            }
+        }
+        
+        function showUpdateReady(info) {
+            const installBtn = document.getElementById('update-install-btn');
+            const downloadBtn = document.querySelector('[onclick="downloadUpdate()"]');
+            const progressContainer = document.getElementById('update-progress');
+            
+            if (installBtn) {
+                installBtn.style.display = 'block';
+                if (downloadBtn) downloadBtn.style.display = 'none';
+                if (progressContainer) progressContainer.style.display = 'none';
+            }
+        }
+        
+        window.downloadUpdate = async function() {
+            try {
+                const result = await updateIpcRenderer.invoke('download-update');
+                if (!result.success) {
+                    console.error('Failed to start download:', result.error);
+                }
+            } catch (error) {
+                console.error('Error downloading update:', error);
+            }
+        };
+        
+        window.installUpdate = async function() {
+            try {
+                const result = await updateIpcRenderer.invoke('install-update');
+                if (!result.success) {
+                    console.error('Failed to install update:', result.error);
+                }
+            } catch (error) {
+                console.error('Error installing update:', error);
+            }
+        };
+        
+        window.dismissUpdateNotification = function() {
+            const notification = document.getElementById('update-notification');
+            if (notification) {
+                notification.style.display = 'none';
+            }
+        };
+        
+    </script>
+    <script>
+        // Python Environment Functions - Define early so they're available for onclick handlers
+        // Get ipcRenderer - use existing one from annotation.js or get new one
+        function getIpcRenderer() {
+            try {
+                if (typeof require !== 'undefined') {
+                    return require('electron').ipcRenderer;
+                }
+            } catch (e) {
+                console.error('Could not load ipcRenderer:', e);
+            }
+            return null;
+        }
+        
+        window.checkPythonStatus = async function() {
+            const ipcRenderer = getIpcRenderer();
+            if (!ipcRenderer) {
+                console.error('ipcRenderer is not available');
+                const logDiv = document.getElementById('python-setup-log');
+                if (logDiv) {
+                    logDiv.style.display = 'block';
+                    logDiv.innerHTML = '<div class="text-danger">Error: IPC Renderer is not available</div>';
+                }
+                return;
+            }
+            
+            const pythonStatus = document.getElementById('python-status');
+            const venvStatus = document.getElementById('venv-status');
+            const packagesStatus = document.getElementById('packages-status');
+            const logDiv = document.getElementById('python-setup-log');
+            
+            if (logDiv) {
+                logDiv.style.display = 'block';
+                logDiv.innerHTML = '<div class="text-info">Checking Python status...</div>';
+            }
+            
+            try {
+                const result = await ipcRenderer.invoke('check-python-status');
+                
+                // Update Python status
+                if (pythonStatus) {
+                    if (result.pythonInstalled) {
+                        pythonStatus.textContent = result.pythonVersion || 'Installed';
+                        pythonStatus.className = 'badge bg-success';
+                    } else {
+                        pythonStatus.textContent = 'Not Found';
+                        pythonStatus.className = 'badge bg-danger';
+                    }
+                }
+                
+                // Update venv status
+                if (venvStatus) {
+                    if (result.venvExists) {
+                        venvStatus.textContent = 'Exists';
+                        venvStatus.className = 'badge bg-success';
+                    } else {
+                        venvStatus.textContent = 'Not Found';
+                        venvStatus.className = 'badge bg-warning';
+                    }
+                }
+                
+                // Update packages status
+                if (packagesStatus) {
+                    if (result.packagesInstalled) {
+                        packagesStatus.textContent = 'Installed';
+                        packagesStatus.className = 'badge bg-success';
+                    } else {
+                        packagesStatus.textContent = 'Missing';
+                        packagesStatus.className = 'badge bg-warning';
+                    }
+                }
+                
+                if (logDiv) {
+                    logDiv.innerHTML = `<div class="text-success">✓ Python: ${result.pythonInstalled ? 'Installed' : 'Not Found'}</div>
+                                        <div class="text-${result.venvExists ? 'success' : 'warning'}">✓ Virtual Environment: ${result.venvExists ? 'Exists' : 'Not Found'}</div>
+                                        <div class="text-${result.packagesInstalled ? 'success' : 'warning'}">✓ Packages: ${result.packagesInstalled ? 'Installed' : 'Missing'}</div>`;
+                }
+            } catch (error) {
+                console.error('Error checking Python status:', error);
+                if (logDiv) {
+                    logDiv.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
+                }
+            }
+        };
+        
+        window.setupPythonEnvironment = async function() {
+            const ipcRenderer = getIpcRenderer();
+            if (!ipcRenderer) {
+                console.error('ipcRenderer is not available');
+                const logDiv = document.getElementById('python-setup-log');
+                if (logDiv) {
+                    logDiv.style.display = 'block';
+                    logDiv.innerHTML = '<div class="text-danger">Error: IPC Renderer is not available</div>';
+                }
+                return;
+            }
+            
+            const logDiv = document.getElementById('python-setup-log');
+            if (logDiv) {
+                logDiv.style.display = 'block';
+                logDiv.innerHTML = '<div class="text-info">Setting up Python environment...</div>';
+            }
+            
+            try {
+                const result = await ipcRenderer.invoke('setup-python-environment');
+                
+                if (logDiv) {
+                    logDiv.innerHTML = result.logs || '<div class="text-success">Environment setup complete!</div>';
+                }
+                
+                // Refresh status after setup
+                setTimeout(() => {
+                    checkPythonStatus();
+                }, 1000);
+            } catch (error) {
+                console.error('Error setting up Python environment:', error);
+                if (logDiv) {
+                    logDiv.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
+                }
+            }
+        };
+        
+        window.installPackages = async function() {
+            const ipcRenderer = getIpcRenderer();
+            if (!ipcRenderer) {
+                console.error('ipcRenderer is not available');
+                const logDiv = document.getElementById('python-setup-log');
+                if (logDiv) {
+                    logDiv.style.display = 'block';
+                    logDiv.innerHTML = '<div class="text-danger">Error: IPC Renderer is not available</div>';
+                }
+                return;
+            }
+            
+            const logDiv = document.getElementById('python-setup-log');
+            if (logDiv) {
+                logDiv.style.display = 'block';
+                logDiv.innerHTML = '<div class="text-info">Installing packages...</div>';
+            }
+            
+            try {
+                const result = await ipcRenderer.invoke('install-python-packages');
+                
+                if (logDiv) {
+                    logDiv.innerHTML = result.logs || '<div class="text-success">Packages installed successfully!</div>';
+                }
+                
+                // Refresh status after installation
+                setTimeout(() => {
+                    checkPythonStatus();
+                }, 1000);
+            } catch (error) {
+                console.error('Error installing packages:', error);
+                if (logDiv) {
+                    logDiv.innerHTML = `<div class="text-danger">Error: ${error.message}</div>`;
+                }
+            }
+        };
+        
         // Simple page switcher logic
         function showPage(pageId) {
             // Hide all pages
@@ -1424,9 +1761,7 @@
                 'home-stats-images': 'Images',
                 'home-stats-models': 'Models',
                 'home-three-step': '3-Step System',
-                'home-three-step-desc': 'Simplified workflow for beginners',
                 'home-admin-check': 'Admin Check',
-                'home-admin-check-desc': 'Use 100 images instead of 1000 for testing',
                 // Download page
                 'download-title': 'Download Images from Reddit',
                 'download-subreddit': 'Subreddit Name',
@@ -1474,11 +1809,25 @@
                 'test-select-image': 'Select Image',
                 'test-confidence': 'Confidence Threshold',
                 'test-run': 'Run Prediction',
-                'test-placeholder': 'Result will appear here',
+                'test-placeholder': 'Load a test folder and select a model to start',
+                'test-load-folder': 'Load Test Folder',
+                'test-conf': 'Conf',
+                'test-no-file': 'No file',
+                'test-detections': 'Detections:',
                 // Settings page
                 'settings-title': 'Settings',
                 'settings-language': 'Language',
                 'settings-theme': 'Theme',
+                'settings-python': 'Python Environment',
+                'settings-python-status': 'Python Status:',
+                'settings-python-checking': 'Checking...',
+                'settings-venv-status': 'Virtual Environment:',
+                'settings-venv-checking': 'Checking...',
+                'settings-packages-status': 'Packages:',
+                'settings-packages-checking': 'Checking...',
+                'settings-check-python': 'Check Python',
+                'settings-setup-python': 'Setup Environment',
+                'settings-install-packages': 'Install Packages',
                 // Annotate page
                 'annotate-conf': 'Conf',
                 // Theme names
@@ -1542,6 +1891,8 @@
                 'home-stats-datasets': 'Наборы данных',
                 'home-stats-images': 'Изображения',
                 'home-stats-models': 'Модели',
+                'home-three-step': 'Система 3 шагов',
+                'home-admin-check': 'Админская проверка',
                 // Download page
                 'download-title': 'Загрузить изображения из Reddit',
                 'download-subreddit': 'Название сабреддита',
@@ -1589,11 +1940,25 @@
                 'test-select-image': 'Выбрать изображение',
                 'test-confidence': 'Порог уверенности',
                 'test-run': 'Запустить предсказание',
-                'test-placeholder': 'Результат появится здесь',
+                'test-placeholder': 'Загрузите тестовую папку и выберите модель для начала',
+                'test-load-folder': 'Загрузить тестовую папку',
+                'test-conf': 'Уверенность',
+                'test-no-file': 'Нет файла',
+                'test-detections': 'Обнаружения:',
                 // Settings page
                 'settings-title': 'Настройки',
                 'settings-language': 'Язык',
                 'settings-theme': 'Тема',
+                'settings-python': 'Python Окружение',
+                'settings-python-status': 'Статус Python:',
+                'settings-python-checking': 'Проверка...',
+                'settings-venv-status': 'Виртуальное окружение:',
+                'settings-venv-checking': 'Проверка...',
+                'settings-packages-status': 'Пакеты:',
+                'settings-packages-checking': 'Проверка...',
+                'settings-check-python': 'Проверить Python',
+                'settings-setup-python': 'Настроить окружение',
+                'settings-install-packages': 'Установить пакеты',
                 // Theme names
                 'theme-dark': 'Тёмная',
                 'theme-light': 'Светлая',
@@ -1658,7 +2023,6 @@
                 'home-three-step': '3ステップシステム',
                 'home-three-step-desc': '初心者向けの簡略化されたワークフロー',
                 'home-admin-check': '管理者チェック',
-                'home-admin-check-desc': 'テスト用に1000枚の代わりに100枚の画像を使用',
                 // Download page
                 'download-title': 'Redditから画像をダウンロード',
                 'download-subreddit': 'サブレディット名',
@@ -1706,11 +2070,33 @@
                 'test-select-image': '画像を選択',
                 'test-confidence': '信頼度のしきい値',
                 'test-run': '予測を実行',
+                'test-placeholder': 'テストフォルダを読み込み、モデルを選択して開始',
+                'test-load-folder': 'テストフォルダを読み込む',
+                'test-conf': '信頼度',
+                'test-no-file': 'ファイルなし',
+                'test-detections': '検出:',
                 'test-placeholder': '結果がここに表示されます',
                 // Settings page
                 'settings-title': '設定',
                 'settings-language': '言語',
                 'settings-theme': 'テーマ',
+                'settings-python': 'Python環境',
+                'settings-python-status': 'Pythonステータス:',
+                'settings-python-checking': '確認中...',
+                'settings-venv-status': '仮想環境:',
+                'settings-venv-checking': '確認中...',
+                'settings-packages-status': 'パッケージ:',
+                'settings-packages-checking': '確認中...',
+                'settings-check-python': 'Pythonを確認',
+                'settings-setup-python': '環境をセットアップ',
+                'settings-install-packages': 'パッケージをインストール',
+                // Update notifications
+                'update-available-title': '更新が利用可能',
+                'update-version': 'バージョン',
+                'update-is-available': 'が利用可能です',
+                'update-downloading': 'ダウンロード中...',
+                'update-download': 'ダウンロード',
+                'update-install': 'インストールして再起動',
                 // Annotate page
                 'annotate-conf': '信頼度',
                 // Theme names
@@ -1771,7 +2157,6 @@
                 'home-three-step': '3 bosqichli tizim',
                 'home-three-step-desc': 'Boshlang\'ichlar uchun soddalashtirilgan ish oqimi',
                 'home-admin-check': 'Admin tekshiruvi',
-                'home-admin-check-desc': 'Test qilish uchun 1000 o\'rniga 100 ta rasm ishlatish',
                 'home-annotate-title': '2. Annotatsiya',
                 'home-annotate-desc': 'Ma\'lumotlar to\'plamingizga yorliq qo\'ying',
                 'home-annotate-btn': 'Annotatsiyani boshlash',
@@ -1825,11 +2210,37 @@
                 'test-select-image': 'Rasmni tanlash',
                 'test-confidence': 'Ishonchlilik chegarasi',
                 'test-run': 'Bashoratni ishga tushirish',
-                'test-placeholder': 'Natija bu yerda ko\'rinadi',
+                'test-placeholder': 'Test papkasini yuklang va modelni tanlang',
+                'test-load-folder': 'Test papkasini yuklash',
+                'test-conf': 'Ishonch',
+                'test-no-file': 'Fayl yo\'q',
+                'test-detections': 'Aniqlashlar:',
+                'test-placeholder': 'Test papkasini yuklang va modelni tanlang',
+                'test-load-folder': 'Test papkasini yuklash',
+                'test-conf': 'Ishonch',
+                'test-no-file': 'Fayl yo\'q',
+                'test-detections': 'Aniqlashlar:',
                 // Settings page
                 'settings-title': 'Sozlamalar',
                 'settings-language': 'Til',
                 'settings-theme': 'Mavzu',
+                'settings-python': 'Python Muhiti',
+                'settings-python-status': 'Python Holati:',
+                'settings-python-checking': 'Tekshirilmoqda...',
+                'settings-venv-status': 'Virtual Muhit:',
+                'settings-venv-checking': 'Tekshirilmoqda...',
+                'settings-packages-status': 'Paketlar:',
+                'settings-packages-checking': 'Tekshirilmoqda...',
+                'settings-check-python': 'Pythonni Tekshirish',
+                'settings-setup-python': 'Muhitni Sozlash',
+                'settings-install-packages': 'Paketlarni O\'rnatish',
+                // Update notifications
+                'update-available-title': 'Yangilanish mavjud',
+                'update-version': 'Versiya',
+                'update-is-available': 'mavjud',
+                'update-downloading': 'Yuklanmoqda...',
+                'update-download': 'Yuklab olish',
+                'update-install': 'O\'rnatish va qayta ishga tushirish',
                 // Theme names
                 'theme-dark': 'Qorong\'i',
                 'theme-light': 'Yorug\'',
@@ -1922,6 +2333,22 @@
             if (languageSelect) {
                 languageSelect.value = langCode;
             }
+        }
+        
+        // Check Python status when settings page is opened
+        // Hook into showPage function from annotation.js
+        const originalShowPage = window.showPage;
+        if (originalShowPage) {
+            window.showPage = function(pageId) {
+                originalShowPage(pageId);
+                if (pageId === 'settings') {
+                    setTimeout(() => {
+                        if (typeof checkPythonStatus === 'function') {
+                            checkPythonStatus();
+                        }
+                    }, 500);
+                }
+            };
         }
 
         // Load saved settings
