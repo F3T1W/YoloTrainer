@@ -92,8 +92,12 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-files
-          # Copy all build artifacts
-          find artifacts -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.blockmap" \) -exec cp {} release-files/ \;
+          # Copy all build artifacts, but exclude helper files like elevate.exe
+          find artifacts -type f \( -name "*.dmg" -o -name "*.AppImage" -o -name "*.blockmap" \) -exec cp {} release-files/ \;
+          # Copy only main .exe files (exclude elevate.exe and other helpers)
+          find artifacts -type f -name "*.exe" ! -name "elevate.exe" ! -name "*.Setup.*.exe" -exec cp {} release-files/ \;
+          # Copy setup .exe files (installers)
+          find artifacts -type f -name "*.Setup.*.exe" -exec cp {} release-files/ \;
           ls -lh release-files/
 
       - name: Create or Update Release

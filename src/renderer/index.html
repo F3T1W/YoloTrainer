@@ -1362,6 +1362,25 @@
                                     </div>
                                 </div>
 
+                                <!-- Update Check -->
+                                <div class="mb-5">
+                                    <h5 class="text-white mb-3"><i class="bi bi-arrow-clockwise me-2"></i><span data-i18n="settings-updates">Updates</span></h5>
+                                    <div class="card bg-dark border-secondary mb-3">
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <span class="text-white" data-i18n="settings-current-version">Current Version:</span>
+                                                    <span id="current-version" class="badge bg-info">1.0.0</span>
+                                                </div>
+                                                <div id="update-check-status" class="text-white-50 small mb-2" style="display: none;"></div>
+                                            </div>
+                                            <button class="btn btn-primary btn-sm" onclick="checkForUpdates()" data-i18n="settings-check-updates">
+                                                <i class="bi bi-search me-1"></i>Check for Updates
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Theme Selection -->
                                 <div>
                                     <h5 class="text-white mb-3"><i class="bi bi-palette me-2"></i><span data-i18n="settings-theme">Theme</span></h5>
@@ -1529,6 +1548,60 @@
                 notification.style.display = 'none';
             }
         };
+        
+        window.checkForUpdates = async function() {
+            const statusDiv = document.getElementById('update-check-status');
+            const checkBtn = document.querySelector('[onclick="checkForUpdates()"]');
+            
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = 'Checking for updates...';
+                statusDiv.className = 'text-white-50 small mb-2';
+            }
+            
+            if (checkBtn) {
+                checkBtn.disabled = true;
+                checkBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Checking...';
+            }
+            
+            try {
+                const result = await updateIpcRenderer.invoke('check-for-updates');
+                if (statusDiv) {
+                    if (result.success) {
+                        statusDiv.textContent = result.message || 'Update check completed. If an update is available, you will see a notification.';
+                        statusDiv.className = 'text-success small mb-2';
+                    } else {
+                        statusDiv.textContent = result.error || 'Failed to check for updates.';
+                        statusDiv.className = 'text-danger small mb-2';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking for updates:', error);
+                if (statusDiv) {
+                    statusDiv.textContent = 'Error: ' + error.message;
+                    statusDiv.className = 'text-danger small mb-2';
+                }
+            } finally {
+                if (checkBtn) {
+                    checkBtn.disabled = false;
+                    const i18nKey = checkBtn.getAttribute('data-i18n');
+                    checkBtn.innerHTML = '<i class="bi bi-search me-1"></i>' + (i18nKey ? document.querySelector(`[data-i18n="${i18nKey}"]`)?.textContent || 'Check for Updates' : 'Check for Updates');
+                }
+            }
+        };
+        
+        // Set current version on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const versionSpan = document.getElementById('current-version');
+            if (versionSpan && typeof require !== 'undefined') {
+                try {
+                    const packageJson = require('../../package.json');
+                    versionSpan.textContent = packageJson.version || '1.0.0';
+                } catch (e) {
+                    console.error('Could not load package.json:', e);
+                }
+            }
+        });
         
     </script>
     <script>
@@ -1828,6 +1901,9 @@
                 'settings-check-python': 'Check Python',
                 'settings-setup-python': 'Setup Environment',
                 'settings-install-packages': 'Install Packages',
+                'settings-updates': 'Updates',
+                'settings-current-version': 'Current Version:',
+                'settings-check-updates': 'Check for Updates',
                 // Annotate page
                 'annotate-conf': 'Conf',
                 // Theme names
@@ -1959,6 +2035,9 @@
                 'settings-check-python': 'Проверить Python',
                 'settings-setup-python': 'Настроить окружение',
                 'settings-install-packages': 'Установить пакеты',
+                'settings-updates': 'Обновления',
+                'settings-current-version': 'Текущая версия:',
+                'settings-check-updates': 'Проверить обновления',
                 // Theme names
                 'theme-dark': 'Тёмная',
                 'theme-light': 'Светлая',
@@ -2234,6 +2313,9 @@
                 'settings-check-python': 'Pythonni Tekshirish',
                 'settings-setup-python': 'Muhitni Sozlash',
                 'settings-install-packages': 'Paketlarni O\'rnatish',
+                'settings-updates': 'Yangilanishlar',
+                'settings-current-version': 'Joriy versiya:',
+                'settings-check-updates': 'Yangilanishlarni tekshirish',
                 // Update notifications
                 'update-available-title': 'Yangilanish mavjud',
                 'update-version': 'Versiya',
