@@ -647,6 +647,17 @@ ipcMain.handle('remove-folder', async (event, folderPath) => {
   }
 });
 
+// Helper function to get venv path (works in both dev and packaged app)
+function getVenvPath() {
+  if (app.isPackaged) {
+    // In packaged app, use userData directory (e.g., ~/Library/Application Support/YOLO Trainer/venv)
+    return path.join(app.getPath('userData'), 'venv');
+  } else {
+    // In dev mode, use project directory
+    return path.join(__dirname, '../../venv');
+  }
+}
+
 // Python Environment Handlers
 ipcMain.handle('check-python-status', async () => {
   const { exec } = require('child_process');
@@ -673,7 +684,7 @@ ipcMain.handle('check-python-status', async () => {
     }
     
     // Check virtual environment
-    const venvPath = path.join(__dirname, '../../venv');
+    const venvPath = getVenvPath();
     result.venvExists = await fs.pathExists(venvPath);
     
     // Check packages if venv exists
@@ -707,7 +718,7 @@ ipcMain.handle('setup-python-environment', async () => {
   const fs = require('fs-extra');
   
   const logs = [];
-  const venvPath = path.join(__dirname, '../../venv');
+  const venvPath = getVenvPath();
   
   try {
     // Check if Python is installed
@@ -791,8 +802,40 @@ ipcMain.handle('install-python-packages', async () => {
   const fs = require('fs-extra');
   
   const logs = [];
-  const venvPath = path.join(__dirname, '../../venv');
-  const requirementsPath = path.join(__dirname, '../../python/requirements.txt');
+  const venvPath = getVenvPath();
+  
+  // Get requirements.txt path - works in both dev and packaged app
+  let requirementsPath;
+  if (app.isPackaged) {
+    // In packaged app, requirements.txt is in app.asar/python/requirements.txt
+    // We need to copy it to a writable location first
+    const userDataPath = app.getPath('userData');
+    const tempRequirementsPath = path.join(userDataPath, 'requirements.txt');
+    
+    // Copy requirements.txt from app.asar to userData if not exists
+    if (!(await fs.pathExists(tempRequirementsPath))) {
+      try {
+        const asarRequirementsPath = path.join(process.resourcesPath, 'app.asar', 'python', 'requirements.txt');
+        // Try to read from app.asar (it's read-only but we can read it)
+        const asarContent = await fs.readFile(asarRequirementsPath, 'utf8');
+        await fs.writeFile(tempRequirementsPath, asarContent);
+        logs.push('✓ Copied requirements.txt to user data directory');
+      } catch (e) {
+        // Fallback: try alternative path
+        const altPath = path.join(__dirname, '../../python/requirements.txt');
+        if (await fs.pathExists(altPath)) {
+          await fs.copy(altPath, tempRequirementsPath);
+          logs.push('✓ Copied requirements.txt from alternative path');
+        } else {
+          logs.push(`✗ Could not find requirements.txt: ${e.message}`);
+          return { success: false, logs: logs.join('\n') };
+        }
+      }
+    }
+    requirementsPath = tempRequirementsPath;
+  } else {
+    requirementsPath = path.join(__dirname, '../../python/requirements.txt');
+  }
   
   try {
     // Check if venv exists
