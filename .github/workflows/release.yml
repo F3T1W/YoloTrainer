@@ -60,11 +60,46 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Get version from tag and update package.json
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+          # Update package.json version to match tag (required for electron-builder)
+          npm version $VERSION --no-git-tag-version --allow-same-version
+
       - name: Build & Publish Application
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run dist:publish
+          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: true
+        run: |
+          echo "Publishing to GitHub Releases..."
+          echo "Version from package.json: $(node -p "require('./package.json').version")"
+          echo "Tag: ${GITHUB_REF#refs/tags/}"
+          
+          # Build and publish
+          npm run dist:publish
+          
+          echo "Publish completed"
+          
+          # List files in dist (for debugging)
+          echo "Files in dist:"
+          ls -la dist/ || echo "dist folder not found"
+
+      - name: Check for metadata files
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "Checking for latest-mac.yml..."
+          if [ -f "dist/latest-mac.yml" ]; then
+            echo "✓ latest-mac.yml found!"
+            cat dist/latest-mac.yml
+          else
+            echo "✗ latest-mac.yml NOT found!"
+            echo "Listing all files in dist:"
+            find dist -type f -name "*.yml" -o -name "*.yaml" || echo "No yml files found"
+          fi
 
       - name: Upload Build Artifacts (backup)
         uses: actions/upload-artifact@v4
