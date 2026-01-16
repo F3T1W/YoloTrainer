@@ -62,7 +62,8 @@ jobs:
 
       - name: Get version from tag and update package.json
         id: version
-        run: node -e "const version = '${{ github.ref_name }}'.replace(/^v/, ''); require('fs').appendFileSync(process.env.GITHUB_OUTPUT, `VERSION=${version}\n`); console.log(`Building version: ${version}`); require('child_process').execSync(`npm version ${version} --no-git-tag-version --allow-same-version`, {stdio: 'inherit'});"
+        run: |
+          node -e "const version = '${{ github.ref_name }}'.replace(/^v/, ''); const fs = require('fs'); const cp = require('child_process'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'VERSION=' + version + '\n'); console.log('Building version: ' + version); cp.execSync('npm version ' + version + ' --no-git-tag-version --allow-same-version', {stdio: 'inherit'});"
 
       - name: Build & Publish Application
         env:
