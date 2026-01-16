@@ -110,6 +110,37 @@ jobs:
           path: dist/*
           retention-days: 7
 
+  # This job ensures metadata files are uploaded to the release
+  # electron-builder may not upload .yml files correctly, so we do it explicitly
+  upload-metadata:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded files
+        run: |
+          echo "Artifacts structure:"
+          find artifacts -type f -name "*.yml" -o -name "*.yaml" | head -20 || echo "No yml files found"
+          echo ""
+          echo "All files in artifacts:"
+          find artifacts -type f | head -30
+
+      - name: Find and upload metadata files
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            artifacts/**/*.yml
+            artifacts/**/*.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # This job ensures release is created even if electron-builder publish fails
   # electron-builder should create release, but this is a fallback
   ensure-release:
