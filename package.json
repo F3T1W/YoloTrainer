@@ -86,7 +86,8 @@
     "publish": {
       "provider": "github",
       "owner": "F3T1W",
-      "repo": "YoloTrainer"
+      "repo": "YoloTrainer",
+      "private": false
     }
   }
 }
