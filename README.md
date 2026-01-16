@@ -1,59 +1,59 @@
 # YOLO Model Trainer
 
-Интерактивное Electron приложение для обучения кастомных YOLO моделей с интеграцией Reddit и удобным интерфейсом разметки.
+Interactive Electron application for training custom YOLO models with Reddit integration and intuitive annotation interface.
 
-## Возможности
+## Features
 
--  **Скачивание данных с Reddit** - автоматическая загрузка изображений из любого subreddit
--  **Интерактивная разметка** - рисуй bounding boxes мышкой прямо на изображении
--  **Кастомные классы** - создавай свои классы (AltGirl, Bimbo, Nerdy, ARMPITS и т.д.)
--  **Обучение YOLOv8** - полный цикл обучения модели
--  **Экспорт моделей** - готовые веса для использования в CodeSlave
+- **Reddit Data Download** - Automatic image download from any subreddit
+- **Interactive Annotation** - Draw bounding boxes directly on images with your mouse
+- **Custom Classes** - Create your own classes (AltGirl, Bimbo, Nerdy, ARMPITS, etc.)
+- **YOLOv8 Training** - Complete model training pipeline
+- **Model Export** - Ready-to-use weights for CodeSlave integration
 
-## Установка
+## Installation
 
 ```bash
-# Установка Node.js зависимостей
+# Install Node.js dependencies
 npm install
 
-# Установка Python зависимостей
+# Install Python dependencies
 pip install -r python/requirements.txt
 
-# Или если используешь виртуальное окружение:
+# Or if using a virtual environment:
 python -m venv .venv
 .venv\Scripts\activate  # Windows
 pip install -r python/requirements.txt
 ```
 
-## Использование
+## Usage
 
-1. **Запуск приложения:**
+1. **Launch the application:**
    ```bash
    npm start
    ```
 
-2. **Скачивание данных:**
-   - Введите название subreddit (например, `kittens`)
-   - Введите название класса (например, `CURLY_KITTEN`)
-   - Укажите лимит изображений
-   - Нажмите "Download Images"
+2. **Download data:**
+   - Enter subreddit name (e.g., `kittens`)
+   - Enter class name (e.g., `CURLY_KITTEN`)
+   - Specify image limit
+   - Click "Download Images"
 
-3. **Разметка данных:**
-   - Выберите класс из списка
-   - Кликни и перетащи мышкой на изображении, чтобы нарисовать bounding box
-   - Нажми "Save & Next" для сохранения и перехода к следующему изображению
-   - Повтори для всех изображений
+3. **Annotate data:**
+   - Select a class from the list
+   - Click and drag on the image to draw a bounding box
+   - Click "Save & Next" to save and move to the next image
+   - Repeat for all images
 
-4. **Обучение модели:**
-   - Настрой параметры (epochs, batch size, image size)
-   - Нажми "Train Model"
-   - Дождись завершения обучения
+4. **Train model:**
+   - Configure parameters (epochs, batch size, image size)
+   - Click "Train Model"
+   - Wait for training to complete
 
-5. **Экспорт:**
-   - Обученная модель будет сохранена в `models/custom_model/weights/best.pt`
-   - Можно экспортировать в CodeSlave для использования
+5. **Export:**
+   - Trained model will be saved in `models/custom_model/weights/best.pt`
+   - Can be exported to CodeSlave for use
 
-## Структура проекта
+## Project Structure
 
 ```
 yolo_trainer/
@@ -61,38 +61,30 @@ yolo_trainer/
 │   ├── main/
 │   │   └── main.js          # Electron main process
 │   └── renderer/
-│       ├── index.html       # UI интерфейс
-│       └── annotation.js    # Логика разметки
+│       ├── index.html       # UI interface
+│       └── annotation.js    # Annotation logic
 ├── python/
-│   ├── reddit_downloader.py # Скрипт скачивания с Reddit
-│   ├── yolo_trainer.py      # Скрипт обучения YOLO
-│   └── requirements.txt     # Python зависимости
-├── datasets/                 # Датысеты
-├── models/                   # Обученные модели
+│   ├── reddit_downloader.py # Reddit download script
+│   ├── yolo_trainer.py      # YOLO training script
+│   └── requirements.txt     # Python dependencies
+├── datasets/                 # Datasets
+├── models/                   # Trained models
 └── package.json
 ```
 
-## Установка на macOS
+## macOS Installation
 
-Если при первом запуске macOS показывает ошибку "приложение повреждено", выполните в терминале:
+If macOS shows an "application is damaged" error on first launch, run in terminal:
 
 ```bash
-# Способ 1: Использовать скрипт (рекомендуется)
+# Method 1: Use the script (recommended)
 ./fix-mac-app.sh "/path/to/YOLO Trainer.app"
 
-# Способ 2: Вручную
+# Method 2: Manual
 xattr -cr "/path/to/YOLO Trainer.app"
 
-# Способ 3: Альтернативный метод
-# Правый клик на приложении → "Открыть" (нужно сделать только один раз)
+# Method 3: Alternative method
+# Right-click on the application → "Open" (only needed once)
 ```
 
-После этого приложение должно запускаться нормально.
-
-## Советы
-
-- Для качественной модели нужно минимум **500-1000 размеченных изображений**
-- Размечай аккуратно - качество разметки напрямую влияет на результат
-- Используй разные углы и позы для разнообразия датасета
-- Начни с малого количества изображений для теста (50-100)
-
+After this, the application should launch normally.
