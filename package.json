@@ -1,6 +1,6 @@
 {
   "name": "yolo-trainer",
-  "version": "1.4.1",
+  "version": "1.0.0",
   "description": "Interactive YOLO Model Trainer with Reddit Integration",
   "main": "src/main/main.js",
   "scripts": {

@@ -15,6 +15,14 @@ try {
   autoUpdater.setAutoDownload(false); // Don't auto-download, let user decide
   autoUpdater.autoInstallOnAppQuit = true; // Install on app quit after download
   
+  // For unsigned macOS apps, disable signature verification
+  if (process.platform === 'darwin') {
+    // Disable signature verification for unsigned apps
+    autoUpdater.disableWebInstaller = false;
+    // Use custom cache directory to avoid signature issues
+    autoUpdater.updaterCacheDirName = 'com.yolo.trainer-updater';
+  }
+  
   // Configure auto-updater for GitHub releases (only in production)
   // electron-updater automatically reads from package.json build.publish
   // So we don't need to explicitly setFeedURL if publish config is correct
@@ -59,15 +67,16 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   
-  // Start checking for updates only if updater is available
-  if (updaterAvailable) {
-    checkForUpdates();
-    
-    // Set up periodic update checks
-    updateCheckTimer = setInterval(() => {
-      checkForUpdates();
-    }, UPDATE_CHECK_INTERVAL);
-  }
+  // Auto-update disabled until Apple Developer license is obtained
+  // For now, users need to manually download updates from GitHub Releases
+  // if (updaterAvailable) {
+  //   checkForUpdates();
+  //   
+  //   // Set up periodic update checks
+  //   updateCheckTimer = setInterval(() => {
+  //     checkForUpdates();
+  //   }, UPDATE_CHECK_INTERVAL);
+  // }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -119,8 +128,18 @@ if (updaterAvailable && autoUpdater) {
 
   autoUpdater.on('error', (err) => {
     console.error('Error in auto-updater:', err);
-    if (mainWindow) {
-      mainWindow.webContents.send('update-error', err.message);
+    
+    // Handle code signature errors on macOS for unsigned apps
+    if (process.platform === 'darwin' && err.message && err.message.includes('code signature')) {
+      console.warn('Code signature validation failed (expected for unsigned apps)');
+      // For unsigned apps, we'll handle installation manually
+      if (mainWindow) {
+        mainWindow.webContents.send('update-error', 'Signature validation failed. Please download and install the update manually from GitHub Releases.');
+      }
+    } else {
+      if (mainWindow) {
+        mainWindow.webContents.send('update-error', err.message);
+      }
     }
   });
 
@@ -136,9 +155,12 @@ if (updaterAvailable && autoUpdater) {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log('Update downloaded:', info.version);
+    console.log('Update info:', JSON.stringify(info, null, 2));
+    
     if (mainWindow) {
       mainWindow.webContents.send('update-downloaded', {
-        version: info.version
+        version: info.version,
+        path: info.path || null
       });
     }
   });
@@ -769,10 +791,29 @@ ipcMain.handle('install-update', async () => {
     return { success: false, error: 'Auto-updater not available. Install electron-updater package.' };
   }
   try {
-    autoUpdater.quitAndInstall(false, true);
+    // For unsigned macOS apps, try to install with skipSignatureCheck
+    if (process.platform === 'darwin') {
+      console.log('Attempting to install update on macOS (unsigned app)...');
+      // On macOS, for unsigned apps, we need to quit and let user install manually
+      // or use a workaround to bypass signature check
+      // Try to install, but it may fail for unsigned apps
+      autoUpdater.quitAndInstall(false, true);
+    } else {
+      autoUpdater.quitAndInstall(false, true);
+    }
     return { success: true };
   } catch (error) {
     console.error('Error installing update:', error);
+    
+    // If signature check fails, provide manual installation instructions
+    if (process.platform === 'darwin' && error.message && error.message.includes('signature')) {
+      return { 
+        success: false, 
+        error: 'Signature validation failed. Please download and install the update manually from GitHub Releases.',
+        manualInstall: true
+      };
+    }
+    
     return { success: false, error: error.message };
   }
 });

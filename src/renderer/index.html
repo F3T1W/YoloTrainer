@@ -1362,7 +1362,7 @@
                                     </div>
                                 </div>
 
-                                <!-- Update Check -->
+                                <!-- Updates - Manual Download -->
                                 <div class="mb-5">
                                     <h5 class="text-white mb-3"><i class="bi bi-arrow-clockwise me-2"></i><span data-i18n="settings-updates">Updates</span></h5>
                                     <div class="card bg-dark border-secondary mb-3">
@@ -1372,11 +1372,13 @@
                                                     <span class="text-white" data-i18n="settings-current-version">Current Version:</span>
                                                     <span id="current-version" class="badge bg-info">1.0.0</span>
                                                 </div>
-                                                <div id="update-check-status" class="text-white-50 small mb-2" style="display: none;"></div>
+                                                <div class="text-white-50 small mb-2" data-i18n="settings-updates-manual-note">
+                                                    Auto-update is disabled. Please download updates manually from GitHub Releases.
+                                                </div>
                                             </div>
-                                            <button class="btn btn-primary btn-sm" onclick="checkForUpdates()" data-i18n="settings-check-updates">
-                                                <i class="bi bi-search me-1"></i>Check for Updates
-                                            </button>
+                                            <a href="https://github.com/F3T1W/YoloTrainer/releases/latest" target="_blank" class="btn btn-primary btn-sm" data-i18n="settings-download-update">
+                                                <i class="bi bi-download me-1"></i>Download Latest Release
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -1903,6 +1905,8 @@
                 'settings-install-packages': 'Install Packages',
                 'settings-updates': 'Updates',
                 'settings-current-version': 'Current Version:',
+                'settings-updates-manual-note': 'Auto-update is disabled. Please download updates manually from GitHub Releases.',
+                'settings-download-update': 'Download Latest Release',
                 'settings-check-updates': 'Check for Updates',
                 // Annotate page
                 'annotate-conf': 'Conf',
@@ -2037,7 +2041,8 @@
                 'settings-install-packages': 'Установить пакеты',
                 'settings-updates': 'Обновления',
                 'settings-current-version': 'Текущая версия:',
-                'settings-check-updates': 'Проверить обновления',
+                'settings-updates-manual-note': 'Автообновление отключено. Пожалуйста, скачайте обновления вручную с GitHub Releases.',
+                'settings-download-update': 'Скачать последний релиз',
                 // Theme names
                 'theme-dark': 'Тёмная',
                 'theme-light': 'Светлая',
@@ -2315,7 +2320,8 @@
                 'settings-install-packages': 'Paketlarni O\'rnatish',
                 'settings-updates': 'Yangilanishlar',
                 'settings-current-version': 'Joriy versiya:',
-                'settings-check-updates': 'Yangilanishlarni tekshirish',
+                'settings-updates-manual-note': 'Avtomatik yangilanish o\'chirilgan. Iltimos, yangilanishlarni GitHub Releases dan qo\'lda yuklab oling.',
+                'settings-download-update': 'Oxirgi relizni yuklab olish',
                 // Update notifications
                 'update-available-title': 'Yangilanish mavjud',
                 'update-version': 'Versiya',

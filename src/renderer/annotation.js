@@ -839,6 +839,10 @@ function translateMessage(key, ...args) {
     return message;
 }
 
+// Toast notification queue management
+let activeToasts = [];
+const MAX_TOASTS = 3;
+
 function showMessage(message, type = 'info') {
     // Check if message is a translation key (starts with 'msg-')
     let displayMessage = message;
@@ -853,6 +857,20 @@ function showMessage(message, type = 'info') {
     // Create toast notification
     const toastContainer = document.getElementById('toastContainer') || createToastContainer();
     
+    // Remove oldest toast if we have reached the limit
+    if (activeToasts.length >= MAX_TOASTS) {
+        const oldestToast = activeToasts.shift();
+        if (oldestToast && typeof bootstrap !== 'undefined') {
+            const bsToast = bootstrap.Toast.getInstance(oldestToast);
+            if (bsToast) {
+                bsToast.hide();
+            }
+        } else if (oldestToast) {
+            oldestToast.classList.remove('show');
+            setTimeout(() => oldestToast.remove(), 300);
+        }
+    }
+    
     const toast = document.createElement('div');
     toast.className = `toast align-items-center text-white bg-${type} border-0`;
     toast.setAttribute('role', 'alert');
@@ -864,6 +882,7 @@ function showMessage(message, type = 'info') {
     `;
     
     toastContainer.appendChild(toast);
+    activeToasts.push(toast);
     
     // Check if bootstrap is defined globally
     if (typeof bootstrap !== 'undefined') {
@@ -875,13 +894,25 @@ function showMessage(message, type = 'info') {
         toast.classList.add('show');
         setTimeout(() => {
             toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 300);
+            setTimeout(() => {
+                toast.remove();
+                // Remove from active toasts array
+                const index = activeToasts.indexOf(toast);
+                if (index > -1) {
+                    activeToasts.splice(index, 1);
+                }
+            }, 300);
         }, 3000);
         return; // Skip the event listener part for bootstrap
     }
     
     toast.addEventListener('hidden.bs.toast', () => {
         toast.remove();
+        // Remove from active toasts array
+        const index = activeToasts.indexOf(toast);
+        if (index > -1) {
+            activeToasts.splice(index, 1);
+        }
     });
 }
 
