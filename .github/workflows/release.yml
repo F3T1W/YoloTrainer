@@ -78,12 +78,26 @@ jobs:
           echo "Version from package.json: $(node -p "require('./package.json').version")"
           echo "Tag: ${{ github.ref_name }}"
           echo "TRAVIS_TAG: $TRAVIS_TAG"
+          echo "GITHUB_REF: ${{ github.ref }}"
+          
+          # Verify tag exists
+          git fetch --tags
+          if git rev-parse "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "✓ Tag ${{ github.ref_name }} exists"
+          else
+            echo "✗ ERROR: Tag ${{ github.ref_name }} does not exist!"
+            exit 1
+          fi
           
           # Build and publish (electron-builder handles parallel publishing correctly)
           # First platform creates release, others add files to it
           # TRAVIS_TAG is used by electron-builder to determine the release tag
           # Use --publish=always to ensure files are published even if release exists
-          npx electron-builder --publish=always
+          npx electron-builder --publish=always || {
+            echo "ERROR: electron-builder publish failed!"
+            echo "This may mean the release was not created or files were not uploaded."
+            exit 1
+          }
           
           echo "Publish completed"
           
@@ -94,6 +108,17 @@ jobs:
           # Check for metadata files (important for auto-updates)
           echo "Checking for metadata files..."
           find dist -name "*.yml" -o -name "*.yaml" | head -20 || echo "No yml files found"
+          
+          # Verify release was created (for debugging)
+          echo "Checking if release exists on GitHub..."
+          if [ -n "$TRAVIS_TAG" ]; then
+            echo "Looking for release with tag: $TRAVIS_TAG"
+            # List recent releases to see what was created
+            echo "Recent releases:"
+            gh release list --limit 5 || echo "gh CLI not available or no releases found"
+          else
+            echo "WARNING: TRAVIS_TAG is not set!"
+          fi
 
       - name: Check for metadata files
         if: matrix.os == 'macos-latest'
