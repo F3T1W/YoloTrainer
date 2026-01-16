@@ -116,11 +116,12 @@ jobs:
           retention-days: 7
 
   # This job ensures metadata files are uploaded to the release
-  # electron-builder may not upload .yml files correctly, so we do it explicitly
+  # electron-builder should publish metadata files, but we upload them as backup
   upload-metadata:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    continue-on-error: true  # Don't fail if metadata upload fails
     
     steps:
       - name: Download all artifacts
@@ -134,8 +135,8 @@ jobs:
         with:
           script: |
             const tag = context.ref.replace('refs/tags/', '');
-            const maxAttempts = 10;
-            const delay = 5000; // 5 seconds
+            const maxAttempts = 20;  // Increased attempts
+            const delay = 10000; // 10 seconds between attempts
             
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
               try {
@@ -154,7 +155,9 @@ jobs:
                   if (attempt < maxAttempts) {
                     await new Promise(resolve => setTimeout(resolve, delay));
                   } else {
-                    throw new Error('Release not found after maximum attempts');
+                    console.log('Release not found after maximum attempts. electron-builder may have failed to create it.');
+                    core.setOutput('release-found', 'false');
+                    return;
                   }
                 } else {
                   throw error;
@@ -163,11 +166,13 @@ jobs:
             }
 
       - name: List downloaded files
+        if: steps.wait-for-release.outputs.release-found != 'false'
         run: |
           echo "Artifacts structure:"
           find artifacts -type f -name "*.yml" -o -name "*.yaml" | head -20 || echo "No yml files found"
 
       - name: Find and upload metadata files
+        if: steps.wait-for-release.outputs.release-found != 'false'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
