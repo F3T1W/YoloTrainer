@@ -62,23 +62,18 @@ jobs:
 
       - name: Get version from tag and update package.json
         id: version
-        shell: bash
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
-          # Update package.json version to match tag (required for electron-builder)
-          npm version $VERSION --no-git-tag-version --allow-same-version
+        run: node -e "const version = '${{ github.ref_name }}'.replace(/^v/, ''); require('fs').appendFileSync(process.env.GITHUB_OUTPUT, `VERSION=${version}\n`); console.log(`Building version: ${version}`); require('child_process').execSync(`npm version ${version} --no-git-tag-version --allow-same-version`, {stdio: 'inherit'});"
 
       - name: Build & Publish Application
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: true
+        shell: bash
         run: |
           echo "Publishing to GitHub Releases..."
           echo "Version from package.json: $(node -p "require('./package.json').version")"
-          echo "Tag: ${GITHUB_REF#refs/tags/}"
+          echo "Tag: ${{ github.ref }}"
           
           # Build and publish
           npm run dist:publish
