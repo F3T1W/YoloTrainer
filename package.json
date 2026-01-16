@@ -91,7 +91,8 @@
       "provider": "github",
       "owner": "F3T1W",
       "repo": "YoloTrainer",
-      "private": false
+      "private": false,
+      "releaseType": "release"
     }
   }
 }

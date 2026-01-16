@@ -140,27 +140,21 @@ jobs:
           path: dist/*
           retention-days: 7
 
-  # This job ensures metadata files are uploaded to the release
-  # electron-builder should publish metadata files, but we upload them as backup
-  upload-metadata:
+  # This job publishes the draft release created by electron-builder
+  # electron-builder creates releases as draft, so we need to publish them
+  publish-release:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    continue-on-error: true  # Don't fail if metadata upload fails
     
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
       - name: Wait for release to be ready
         id: wait-for-release
         uses: actions/github-script@v7
         with:
           script: |
             const tag = context.ref.replace('refs/tags/', '');
-            const maxAttempts = 20;  // Increased attempts
+            const maxAttempts = 20;
             const delay = 10000; // 10 seconds between attempts
             
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -172,7 +166,9 @@ jobs:
                 });
                 console.log(`Release found on attempt ${attempt}: ${release.data.html_url}`);
                 console.log(`Release ID: ${release.data.id}`);
+                console.log(`Release draft status: ${release.data.draft}`);
                 core.setOutput('release-id', release.data.id);
+                core.setOutput('is-draft', release.data.draft);
                 return;
               } catch (error) {
                 if (error.status === 404) {
@@ -180,9 +176,7 @@ jobs:
                   if (attempt < maxAttempts) {
                     await new Promise(resolve => setTimeout(resolve, delay));
                   } else {
-                    console.log('Release not found after maximum attempts. electron-builder may have failed to create it.');
-                    core.setOutput('release-found', 'false');
-                    return;
+                    throw new Error('Release not found after maximum attempts');
                   }
                 } else {
                   throw error;
@@ -190,14 +184,43 @@ jobs:
               }
             }
 
+      - name: Publish draft release
+        if: steps.wait-for-release.outputs.is-draft == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releaseId = ${{ steps.wait-for-release.outputs.release-id }};
+            console.log(`Publishing draft release ${releaseId}...`);
+            
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              draft: false
+            });
+            
+            console.log('Release published successfully!');
+
+  # This job ensures metadata files are uploaded to the release
+  # electron-builder should publish metadata files, but we upload them as backup
+  upload-metadata:
+    needs: [build, publish-release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    continue-on-error: true  # Don't fail if metadata upload fails
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: List downloaded files
-        if: steps.wait-for-release.outputs.release-found != 'false'
         run: |
           echo "Artifacts structure:"
           find artifacts -type f -name "*.yml" -o -name "*.yaml" | head -20 || echo "No yml files found"
 
       - name: Find and upload metadata files
-        if: steps.wait-for-release.outputs.release-found != 'false'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
