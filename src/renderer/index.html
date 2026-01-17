@@ -1027,6 +1027,15 @@
                                             <button type="button" id="btn-start-download" class="btn btn-danger btn-lg flex-grow-1" onclick="handleDownload(event)">
                                                 <i class="bi bi-download me-2"></i><span data-i18n="download-start">Start Download</span>
                                             </button>
+                                            <button type="button" id="btn-pause-download" class="btn btn-warning btn-lg" onclick="handlePauseDownload(event)" style="display: none;">
+                                                <i class="bi bi-pause me-2"></i><span data-i18n="download-pause">Pause</span>
+                                            </button>
+                                            <button type="button" id="btn-resume-download" class="btn btn-success btn-lg" onclick="handleResumeDownload(event)" style="display: none;">
+                                                <i class="bi bi-play me-2"></i><span data-i18n="download-resume">Resume</span>
+                                            </button>
+                                            <button type="button" id="btn-stop-download" class="btn btn-danger btn-lg" onclick="handleStopDownload(event)" style="display: none;">
+                                                <i class="bi bi-stop me-2"></i><span data-i18n="download-stop">Stop</span>
+                                            </button>
                                             <button type="button" class="btn btn-outline-light btn-lg" onclick="showPage('classes')">
                                                 <span data-i18n="download-continue">Continue</span> <i class="bi bi-arrow-right ms-2"></i>
                                             </button>
@@ -1379,6 +1388,21 @@
                                             <a href="https://github.com/F3T1W/YoloTrainer/releases/latest" target="_blank" class="btn btn-primary btn-sm" data-i18n="settings-download-update">
                                                 <i class="bi bi-download me-1"></i>Download Latest Release
                                             </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Models Folder -->
+                                <div class="mb-5">
+                                    <h5 class="text-white mb-3"><i class="bi bi-folder2-open me-2"></i><span data-i18n="settings-models-folder">Models Folder</span></h5>
+                                    <div class="card bg-dark border-secondary mb-3">
+                                        <div class="card-body">
+                                            <div class="text-white-50 small mb-3" data-i18n="settings-models-folder-desc">
+                                                Open the folder containing all trained model versions.
+                                            </div>
+                                            <button class="btn btn-primary btn-sm" onclick="openModelsFolder()" data-i18n="settings-open-models-folder">
+                                                <i class="bi bi-folder2-open me-1"></i>Open Models Folder
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1846,6 +1870,9 @@
                 'download-browse': 'Browse',
                 'download-downloading': 'Downloading...',
                 'download-start': 'Start Download',
+                'download-pause': 'Pause',
+                'download-resume': 'Resume',
+                'download-stop': 'Stop',
                 'download-continue': 'Continue',
                 // Classes page
                 'classes-managed': 'Managed Classes',
@@ -1907,6 +1934,9 @@
                 'settings-current-version': 'Current Version:',
                 'settings-updates-manual-note': 'Auto-update is disabled. Please download updates manually from GitHub Releases.',
                 'settings-download-update': 'Download Latest Release',
+                'settings-models-folder': 'Models Folder',
+                'settings-models-folder-desc': 'Open the folder containing all trained model versions.',
+                'settings-open-models-folder': 'Open Models Folder',
                 'settings-check-updates': 'Check for Updates',
                 // Annotate page
                 'annotate-conf': 'Conf',
@@ -1926,6 +1956,10 @@
                 'msg-enter-subreddit': 'Please enter subreddit name',
                 'msg-download-complete': 'Download complete! You can now load the dataset to start annotating.',
                 'msg-download-error': 'Error: {0}',
+                'msg-download-paused': 'Download paused',
+                'msg-download-resumed': 'Download resumed',
+                'msg-download-stopped': 'Download stopped',
+                'msg-error-opening-folder': 'Error opening folder: {0}',
                 'msg-images-loaded': 'Loaded {0} images',
                 'msg-no-images-found': 'No images found in the selected folder.',
                 'msg-no-images-loaded': 'No images loaded',
@@ -1982,6 +2016,9 @@
                 'download-browse': 'Обзор',
                 'download-downloading': 'Загрузка...',
                 'download-start': 'Начать загрузку',
+                'download-pause': 'Пауза',
+                'download-resume': 'Возобновить',
+                'download-stop': 'Стоп',
                 'download-continue': 'Продолжить',
                 // Classes page
                 'classes-managed': 'Управляемые классы',
@@ -2043,6 +2080,9 @@
                 'settings-current-version': 'Текущая версия:',
                 'settings-updates-manual-note': 'Автообновление отключено. Пожалуйста, скачайте обновления вручную с GitHub Releases.',
                 'settings-download-update': 'Скачать последний релиз',
+                'settings-models-folder': 'Папка с моделями',
+                'settings-models-folder-desc': 'Открыть папку со всеми обученными версиями моделей.',
+                'settings-open-models-folder': 'Открыть папку с моделями',
                 // Theme names
                 'theme-dark': 'Тёмная',
                 'theme-light': 'Светлая',
@@ -2059,6 +2099,10 @@
                 'msg-enter-subreddit': 'Пожалуйста, введите название сабреддита',
                 'msg-download-complete': 'Загрузка завершена! Теперь вы можете загрузить набор данных для начала аннотации.',
                 'msg-download-error': 'Ошибка: {0}',
+                'msg-download-paused': 'Загрузка приостановлена',
+                'msg-download-resumed': 'Загрузка возобновлена',
+                'msg-download-stopped': 'Загрузка остановлена',
+                'msg-error-opening-folder': 'Ошибка открытия папки: {0}',
                 'msg-images-loaded': 'Загружено {0} изображений',
                 'msg-no-images-found': 'В выбранной папке не найдено изображений.',
                 'msg-no-images-loaded': 'Изображения не загружены',

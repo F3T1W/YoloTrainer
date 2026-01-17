@@ -176,7 +176,6 @@ ipcMain.handle('select-dataset-folder', async () => {
 
 ipcMain.handle('load-dataset', async (event, datasetPath) => {
   try {
-    // Check if "images" folder exists
     const imagesPath = path.join(datasetPath, 'images');
     const hasImagesFolder = await fs.pathExists(imagesPath);
     
@@ -185,7 +184,6 @@ ipcMain.handle('load-dataset', async (event, datasetPath) => {
       targetPath = imagesPath;
     }
     
-    // Read files from target path (either root or images folder)
     const files = await fs.readdir(targetPath);
     return files.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
   } catch (e) {
@@ -193,32 +191,47 @@ ipcMain.handle('load-dataset', async (event, datasetPath) => {
   }
 });
 
-ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class_name, output_dir }) => {
+let currentDownloadProcess = null;
+let downloadPaused = false;
+let downloadStopped = false;
+
+ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class_name, output_dir, three_step_mode }) => {
   return new Promise((resolve, reject) => {
+    downloadPaused = false;
+    downloadStopped = false;
+    
     const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
     const scriptPath = path.join(__dirname, '../../python/reddit_downloader.py');
     
-    // Use provided output_dir or default to datasets/raw
     const outputPath = output_dir || path.join(__dirname, '../../datasets/raw');
     
-    const pythonProcess = spawn(pythonPath, [
+    const args = [
       scriptPath,
       '--subreddit', subreddit,
       '--limit', limit.toString(),
       '--class', class_name,
       '--output', outputPath
-    ]);
+    ];
+    
+    if (three_step_mode) {
+      args.push('--three-step');
+    }
+    
+    const pythonProcess = spawn(pythonPath, args);
 
+    currentDownloadProcess = pythonProcess;
     let output = '';
     let downloadedCount = 0;
     
     pythonProcess.stdout.on('data', (d) => {
+      if (downloadStopped) return;
+      
       const data = d.toString();
       output += data;
-      if (mainWindow) mainWindow.webContents.send('download-progress', data);
+      if (mainWindow && !downloadPaused) {
+        mainWindow.webContents.send('download-progress', data);
+      }
       
-      // Try to extract downloaded count from output
-      // Look for patterns like "Downloaded X/Y:" or "Download complete! X images"
       const match = data.match(/Downloaded\s+(\d+)\/(\d+):|Download complete!\s+(\d+)\s+images/);
       if (match) {
         downloadedCount = parseInt(match[1] || match[3] || 0);
@@ -226,18 +239,25 @@ ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class
     });
     
     pythonProcess.stderr.on('data', (d) => {
-      console.error(`Reddit Download Error: ${d}`);
+      if (!downloadStopped) {
+        console.error(`Reddit Download Error: ${d}`);
+      }
     });
 
     pythonProcess.on('close', (code) => {
+      currentDownloadProcess = null;
+      if (downloadStopped) {
+        // Don't reject - just resolve with stopped flag to avoid error message
+        resolve({ success: false, stopped: true, message: 'Download stopped by user' });
+        return;
+      }
+      
       if (code === 0) {
-        // If we couldn't extract from output, try to parse the last line
         if (downloadedCount === 0) {
           const lastLineMatch = output.match(/Download complete!\s+(\d+)\s+images/);
           if (lastLineMatch) {
             downloadedCount = parseInt(lastLineMatch[1]);
           } else {
-            // Fallback: use limit as approximation
             downloadedCount = limit;
           }
         }
@@ -247,6 +267,55 @@ ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class
       }
     });
   });
+});
+
+ipcMain.handle('pause-download', async () => {
+  if (currentDownloadProcess && !downloadStopped) {
+    downloadPaused = true;
+    // SIGSTOP/SIGCONT don't work on Windows, so we'll use a flag-based approach
+    // The Python script will check for a pause file
+    if (process.platform !== 'win32') {
+      currentDownloadProcess.kill('SIGSTOP');
+    }
+    return { success: true };
+  }
+  return { success: false, error: 'No active download' };
+});
+
+ipcMain.handle('resume-download', async () => {
+  if (currentDownloadProcess && !downloadStopped && downloadPaused) {
+    downloadPaused = false;
+    if (process.platform !== 'win32') {
+      currentDownloadProcess.kill('SIGCONT');
+    }
+    return { success: true };
+  }
+  return { success: false, error: 'No paused download' };
+});
+
+ipcMain.handle('stop-download', async () => {
+  if (currentDownloadProcess) {
+    downloadStopped = true;
+    downloadPaused = false;
+    currentDownloadProcess.kill('SIGTERM');
+    currentDownloadProcess = null;
+    return { success: true };
+  }
+  return { success: false, error: 'No active download' };
+});
+
+ipcMain.handle('open-models-folder', async () => {
+  const { shell } = require('electron');
+  const modelsHistoryPath = path.join(__dirname, '../../models/models_history');
+  
+  try {
+    await fs.ensureDir(modelsHistoryPath);
+    await shell.openPath(modelsHistoryPath);
+    return { success: true };
+  } catch (e) {
+    console.error('Error opening models folder:', e);
+    return { success: false, error: e.message };
+  }
 });
 
 ipcMain.handle('get-default-temp-path', async () => {
@@ -274,16 +343,13 @@ ipcMain.handle('distribute-three-step-images', async (event, { sourcePath, baseP
       totalCount
     });
     
-    // Ensure base directory exists
     await fs.ensureDir(baseDir);
     console.log('Base directory ensured:', baseDir);
     
-    // Create main class folder
     const classFolder = path.join(baseDir, className);
     await fs.ensureDir(classFolder);
     console.log('Class folder created:', classFolder);
     
-    // Create subfolders with YOLO structure (images and labels)
     const folder15 = path.join(classFolder, `${className}_15`);
     const folder35 = path.join(classFolder, `${className}_35`);
     const folder50 = path.join(classFolder, `${className}_50`);
@@ -301,32 +367,26 @@ ipcMain.handle('distribute-three-step-images', async (event, { sourcePath, baseP
       folder50
     });
     
-    // Get all image files from source
     const files = await fs.readdir(sourceDir);
     const imageFiles = files.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
     
-    // Fixed distribution: 150, 350, rest (ideally 500)
+    // Three-step distribution: 150, 350, rest (ideally 500)
+    // Don't shuffle - images are already in correct order from download
     const count15 = 150;
     const count35 = 350;
     
-    // Don't shuffle - images are already in correct order from download
-    // (first 150, next 350, rest)
-    
-    // Copy to folder15 (first 150)
     for (let i = 0; i < count15 && i < imageFiles.length; i++) {
       const src = path.join(sourceDir, imageFiles[i]);
       const dest = path.join(folder15, 'images', imageFiles[i]);
       await fs.copy(src, dest);
     }
     
-    // Copy to folder35 (next 350)
     for (let i = count15; i < count15 + count35 && i < imageFiles.length; i++) {
       const src = path.join(sourceDir, imageFiles[i]);
       const dest = path.join(folder35, 'images', imageFiles[i]);
       await fs.copy(src, dest);
     }
     
-    // Copy to folder50 (remaining, ideally 500)
     for (let i = count15 + count35; i < imageFiles.length; i++) {
       const src = path.join(sourceDir, imageFiles[i]);
       const dest = path.join(folder50, 'images', imageFiles[i]);
@@ -337,7 +397,6 @@ ipcMain.handle('distribute-three-step-images', async (event, { sourcePath, baseP
     const actualCount35 = Math.min(count35, Math.max(0, imageFiles.length - count15));
     const actualCount50 = Math.max(0, imageFiles.length - count15 - count35);
     
-    // Clean up temp folder
     await fs.remove(sourceDir);
     
     return {
@@ -376,14 +435,24 @@ ipcMain.handle('get-images-list', async (event, datasetPath) => {
 
 ipcMain.handle('save-annotation', async (event, { imagePath, annotations, classNames }) => {
   try {
-    const datasetDir = path.dirname(path.dirname(imagePath));
+    // Determine labels directory based on image path structure
+    // If imagePath is CLASSNAME/images/image.jpg, labels should be in CLASSNAME/labels
+    // If imagePath is CLASSNAME/image.jpg, labels should be in CLASSNAME/labels
+    let datasetDir;
+    if (imagePath.includes(path.sep + 'images' + path.sep)) {
+      // Image is in images subfolder: CLASSNAME/images/image.jpg
+      datasetDir = path.dirname(path.dirname(imagePath));
+    } else {
+      // Image is directly in class folder: CLASSNAME/image.jpg
+      datasetDir = path.dirname(imagePath);
+    }
     const labelsDir = path.join(datasetDir, 'labels');
     await fs.ensureDir(labelsDir);
     
     const imageName = path.basename(imagePath, path.extname(imagePath));
     const labelPath = path.join(labelsDir, `${imageName}.txt`);
     
-    // Convert to YOLO format: class_id center_x center_y width height (normalized)
+    // YOLO format: class_id center_x center_y width height (normalized)
     const lines = annotations.map(ann => {
       const classId = classNames.indexOf(ann.className);
       return `${classId} ${ann.centerX} ${ann.centerY} ${ann.width} ${ann.height}`;
@@ -396,37 +465,36 @@ ipcMain.handle('save-annotation', async (event, { imagePath, annotations, classN
   }
 });
 
-ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, imgSize, classNames }) => {
+ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, imgSize, classNames, className, learningPercent }) => {
   return new Promise((resolve, reject) => {
     const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
     const scriptPath = path.join(__dirname, '../../python/yolo_trainer.py');
     
-    // Detect Apple Silicon (M1/M2/M3/M4)
     const isAppleSilicon = process.platform === 'darwin' && process.arch === 'arm64';
     
-    // Optimize batch size for M4 (24GB unified memory can handle larger batches)
+    // Optimize batch size for Apple Silicon (M1/M2/M3/M4) - larger unified memory can handle bigger batches
     let optimizedBatchSize = batchSize;
-    let optimizedWorkers = 8; // Default workers
+    let optimizedWorkers = 8;
     
     if (isAppleSilicon) {
-      // M4 with 24GB can handle larger batches
       // Optimize based on image size: larger images = smaller batch
       if (imgSize <= 416) {
-        optimizedBatchSize = Math.min(batchSize * 2, 64); // Up to 64 for small images
-        optimizedWorkers = 12; // More workers for faster data loading
+        optimizedBatchSize = Math.min(batchSize * 2, 64);
+        optimizedWorkers = 12;
       } else if (imgSize <= 640) {
-        optimizedBatchSize = Math.min(batchSize * 1.5, 48); // Up to 48 for medium images
+        optimizedBatchSize = Math.min(batchSize * 1.5, 48);
         optimizedWorkers = 10;
       } else {
-        optimizedBatchSize = Math.min(batchSize, 32); // Keep original or max 32 for large images
+        optimizedBatchSize = Math.min(batchSize, 32);
         optimizedWorkers = 8;
       }
       
       console.log(`Apple Silicon detected! Optimized batch size: ${optimizedBatchSize}, workers: ${optimizedWorkers}`);
     }
     
-    // Ensure classNames is an array and join it
     const classNamesStr = Array.isArray(classNames) ? classNames.join(',') : '';
+    const modelClassName = className || (classNamesStr.split(',')[0] || 'Unknown');
+    const modelLearningPercent = learningPercent || 100;
 
     const pythonProcess = spawn(pythonPath, [
       scriptPath,
@@ -437,7 +505,9 @@ ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, im
       '--output', path.join(__dirname, '../../models'),
       '--class-names', classNamesStr,
       '--workers', optimizedWorkers.toString(),
-      '--device', isAppleSilicon ? 'mps' : 'auto' // Use MPS for Apple Silicon
+      '--device', isAppleSilicon ? 'mps' : 'auto',
+      '--model-class-name', modelClassName,
+      '--model-learning-percent', modelLearningPercent.toString()
     ]);
 
     let output = '';
@@ -447,35 +517,15 @@ ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, im
     });
     
     pythonProcess.stderr.on('data', (d) => {
-      // YOLO outputs progress to stderr sometimes, so we want to see it too
+      // YOLO outputs progress to stderr, forward to UI
       if (mainWindow) mainWindow.webContents.send('training-progress', d.toString());
       console.error(`Training Info: ${d}`);
     });
 
     pythonProcess.on('close', (code) => {
       if (code === 0) {
-        // After successful training, also copy best.pt to history with unique name
-        setTimeout(async () => {
-          try {
-            const bestModelPath = path.join(__dirname, '../../models/custom_model/weights/best.pt');
-            const historyDir = path.join(__dirname, '../../models/models_history');
-            await fs.ensureDir(historyDir);
-            
-            if (await fs.pathExists(bestModelPath)) {
-              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-              const classNamesForFile = classNamesStr.split(',').slice(0, 3).join('_').replace(/\s+/g, '_').substring(0, 30);
-              const uniqueName = `${timestamp}_${classNamesForFile}.pt`;
-              const historyPath = path.join(historyDir, uniqueName);
-              
-              await fs.copy(bestModelPath, historyPath);
-              console.log('Model saved to history:', historyPath);
-            }
-          } catch (e) {
-            console.error('Error saving model to history:', e);
-            // Don't fail training if history save fails
-          }
-        }, 1000);
-        
+        // Model is already saved to history by Python script (yolo_trainer.py)
+        // No need to duplicate it here
         resolve({ success: true, message: output });
       } else {
         reject(new Error(`Training failed with code ${code}`));
@@ -485,7 +535,6 @@ ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, im
 });
 
 ipcMain.handle('export-model', async (event, { modelPath, outputPath }) => {
-  // Copy model to CodeSlave project
   try {
     const targetPath = path.join(__dirname, '../../../CodeSlave/python_bridge/custom_models');
     await fs.ensureDir(targetPath);
@@ -587,7 +636,6 @@ ipcMain.handle('predict-image', async (event, { modelPath, imagePath, conf }) =>
         resolve({ success: true, resultPath: resultPath, output: output, detections: detections });
       } else {
         if (code === 0) {
-           // Fallback if marker not found but exit 0, though predict.py ensures it prints it
            reject(new Error(`Prediction finished but no output path found. Output: ${output}`));
         } else {
            reject(new Error(`Prediction failed with code ${code}. Output: ${output}`));
@@ -597,29 +645,24 @@ ipcMain.handle('predict-image', async (event, { modelPath, imagePath, conf }) =>
   });
 });
 
-// Copy folder handler
 ipcMain.handle('copy-folder', async (event, { source, destination }) => {
   try {
     const fs = require('fs-extra');
     console.log('Copying folder from', source, 'to', destination);
     
-    // Check if source exists
     const sourceExists = await fs.pathExists(source);
     if (!sourceExists) {
       console.log('Source folder does not exist:', source);
       return { success: false, error: 'Source folder does not exist' };
     }
     
-    // Ensure destination parent directory exists
     const destParent = path.dirname(destination);
     await fs.ensureDir(destParent);
     
-    // Remove destination if it exists (to avoid nested folders)
     if (await fs.pathExists(destination)) {
       await fs.remove(destination);
     }
     
-    // Copy entire folder from source to destination
     await fs.copy(source, destination, { overwrite: true });
     
     console.log('Folder copied successfully');
@@ -630,7 +673,6 @@ ipcMain.handle('copy-folder', async (event, { source, destination }) => {
   }
 });
 
-// Remove folder handler
 ipcMain.handle('remove-folder', async (event, folderPath) => {
   try {
     const fs = require('fs-extra');
@@ -651,18 +693,15 @@ ipcMain.handle('remove-folder', async (event, folderPath) => {
   }
 });
 
-// Helper function to get venv path (works in both dev and packaged app)
+// Get venv path - use userData for packaged apps (because .asar is read-only)
 function getVenvPath() {
   if (app.isPackaged) {
-    // In packaged app, use userData directory (e.g., ~/Library/Application Support/YOLO Trainer/venv)
     return path.join(app.getPath('userData'), 'venv');
   } else {
-    // In dev mode, use project directory
     return path.join(__dirname, '../../venv');
   }
 }
 
-// Python Environment Handlers
 ipcMain.handle('check-python-status', async () => {
   const { exec } = require('child_process');
   const { promisify } = require('util');
@@ -677,7 +716,6 @@ ipcMain.handle('check-python-status', async () => {
   };
   
   try {
-    // Check Python
     const pythonCmd = process.platform === 'win32' ? 'python --version' : 'python3 --version';
     try {
       const { stdout } = await execAsync(pythonCmd);
@@ -687,11 +725,9 @@ ipcMain.handle('check-python-status', async () => {
       result.pythonInstalled = false;
     }
     
-    // Check virtual environment
     const venvPath = getVenvPath();
     result.venvExists = await fs.pathExists(venvPath);
     
-    // Check packages if venv exists
     if (result.venvExists) {
       const pythonPath = process.platform === 'win32' 
         ? path.join(venvPath, 'Scripts', 'python.exe')
@@ -699,7 +735,6 @@ ipcMain.handle('check-python-status', async () => {
       
       if (await fs.pathExists(pythonPath)) {
         try {
-          // Check if ultralytics is installed (main package)
           const { stdout } = await execAsync(`"${pythonPath}" -c "import ultralytics; print('OK')"`);
           result.packagesInstalled = stdout.includes('OK');
         } catch (e) {
@@ -725,7 +760,6 @@ ipcMain.handle('setup-python-environment', async () => {
   const venvPath = getVenvPath();
   
   try {
-    // Check if Python is installed
     const pythonCmd = process.platform === 'win32' ? 'python --version' : 'python3 --version';
     try {
       await execAsync(pythonCmd);
@@ -735,7 +769,6 @@ ipcMain.handle('setup-python-environment', async () => {
       return { success: false, logs: logs.join('\n') };
     }
     
-    // Create virtual environment
     if (!(await fs.pathExists(venvPath))) {
       logs.push('Creating virtual environment...');
       const pythonExe = process.platform === 'win32' ? 'python' : 'python3';
@@ -759,7 +792,6 @@ ipcMain.handle('setup-python-environment', async () => {
   }
 });
 
-// Update handlers (only if updater is available)
 ipcMain.handle('check-for-updates', async () => {
   if (!updaterAvailable || !autoUpdater) {
     return { success: false, error: 'Auto-updater not available. Install electron-updater package.' };
@@ -791,12 +823,9 @@ ipcMain.handle('install-update', async () => {
     return { success: false, error: 'Auto-updater not available. Install electron-updater package.' };
   }
   try {
-    // For unsigned macOS apps, try to install with skipSignatureCheck
     if (process.platform === 'darwin') {
       console.log('Attempting to install update on macOS (unsigned app)...');
-      // On macOS, for unsigned apps, we need to quit and let user install manually
-      // or use a workaround to bypass signature check
-      // Try to install, but it may fail for unsigned apps
+      // For unsigned macOS apps, installation may fail - user needs to install manually
       autoUpdater.quitAndInstall(false, true);
     } else {
       autoUpdater.quitAndInstall(false, true);
@@ -805,7 +834,6 @@ ipcMain.handle('install-update', async () => {
   } catch (error) {
     console.error('Error installing update:', error);
     
-    // If signature check fails, provide manual installation instructions
     if (process.platform === 'darwin' && error.message && error.message.includes('signature')) {
       return { 
         success: false, 
@@ -827,24 +855,19 @@ ipcMain.handle('install-python-packages', async () => {
   const logs = [];
   const venvPath = getVenvPath();
   
-  // Get requirements.txt path - works in both dev and packaged app
+  // In packaged apps, requirements.txt is in app.asar (read-only), so copy to userData
   let requirementsPath;
   if (app.isPackaged) {
-    // In packaged app, requirements.txt is in app.asar/python/requirements.txt
-    // We need to copy it to a writable location first
     const userDataPath = app.getPath('userData');
     const tempRequirementsPath = path.join(userDataPath, 'requirements.txt');
     
-    // Copy requirements.txt from app.asar to userData if not exists
     if (!(await fs.pathExists(tempRequirementsPath))) {
       try {
         const asarRequirementsPath = path.join(process.resourcesPath, 'app.asar', 'python', 'requirements.txt');
-        // Try to read from app.asar (it's read-only but we can read it)
         const asarContent = await fs.readFile(asarRequirementsPath, 'utf8');
         await fs.writeFile(tempRequirementsPath, asarContent);
         logs.push('✓ Copied requirements.txt to user data directory');
       } catch (e) {
-        // Fallback: try alternative path
         const altPath = path.join(__dirname, '../../python/requirements.txt');
         if (await fs.pathExists(altPath)) {
           await fs.copy(altPath, tempRequirementsPath);
@@ -861,13 +884,11 @@ ipcMain.handle('install-python-packages', async () => {
   }
   
   try {
-    // Check if venv exists
     if (!(await fs.pathExists(venvPath))) {
       logs.push('✗ Virtual environment not found. Please setup environment first.');
       return { success: false, logs: logs.join('\n') };
     }
     
-    // Get pip path
     const pipPath = process.platform === 'win32'
       ? path.join(venvPath, 'Scripts', 'pip.exe')
       : path.join(venvPath, 'bin', 'pip');
@@ -877,7 +898,6 @@ ipcMain.handle('install-python-packages', async () => {
       return { success: false, logs: logs.join('\n') };
     }
     
-    // Upgrade pip
     logs.push('Upgrading pip...');
     try {
       await execAsync(`"${pipPath}" install --upgrade pip`);
@@ -886,7 +906,6 @@ ipcMain.handle('install-python-packages', async () => {
       logs.push(`⚠ Warning: Could not upgrade pip: ${e.message}`);
     }
     
-    // Install packages
     logs.push('Installing packages from requirements.txt...');
     try {
       const { stdout, stderr } = await execAsync(`"${pipPath}" install -r "${requirementsPath}"`);
@@ -907,19 +926,16 @@ ipcMain.handle('install-python-packages', async () => {
   }
 });
 
-// Merge three-step annotations handler
 ipcMain.handle('merge-three-step-annotations', async (event, { basePath, className, outputFolder }) => {
   try {
     const fs = require('fs-extra');
     console.log('Merging three-step annotations:', { basePath, className, outputFolder });
     
-    // Create output folder structure
     const outputImagesPath = path.join(outputFolder, 'images');
     const outputLabelsPath = path.join(outputFolder, 'labels');
     await fs.ensureDir(outputImagesPath);
     await fs.ensureDir(outputLabelsPath);
     
-    // Folders to merge
     const folder15 = path.join(basePath, `${className}_15`);
     const folder35 = path.join(basePath, `${className}_35`);
     const folder50 = path.join(basePath, `${className}_50`);
@@ -927,7 +943,6 @@ ipcMain.handle('merge-three-step-annotations', async (event, { basePath, classNa
     let totalImages = 0;
     let totalLabels = 0;
     
-    // Merge from folder 15
     const folder15Images = path.join(folder15, 'images');
     const folder15Labels = path.join(folder15, 'labels');
     if (await fs.pathExists(folder15Images)) {
@@ -937,7 +952,6 @@ ipcMain.handle('merge-three-step-annotations', async (event, { basePath, classNa
           await fs.copy(path.join(folder15Images, img), path.join(outputImagesPath, img));
           totalImages++;
           
-          // Copy corresponding label if exists
           const labelName = path.basename(img, path.extname(img)) + '.txt';
           const labelPath = path.join(folder15Labels, labelName);
           if (await fs.pathExists(labelPath)) {
@@ -949,7 +963,6 @@ ipcMain.handle('merge-three-step-annotations', async (event, { basePath, classNa
     }
     console.log(`Merged from folder 15: ${totalImages} images, ${totalLabels} labels`);
     
-    // Merge from folder 35
     const folder35Images = path.join(folder35, 'images');
     const folder35Labels = path.join(folder35, 'labels');
     if (await fs.pathExists(folder35Images)) {
@@ -959,7 +972,6 @@ ipcMain.handle('merge-three-step-annotations', async (event, { basePath, classNa
           await fs.copy(path.join(folder35Images, img), path.join(outputImagesPath, img));
           totalImages++;
           
-          // Copy corresponding label if exists
           const labelName = path.basename(img, path.extname(img)) + '.txt';
           const labelPath = path.join(folder35Labels, labelName);
           if (await fs.pathExists(labelPath)) {
@@ -971,7 +983,6 @@ ipcMain.handle('merge-three-step-annotations', async (event, { basePath, classNa
     }
     console.log(`Merged from folder 35: ${totalImages} images, ${totalLabels} labels`);
     
-    // Merge from folder 50
     const folder50Images = path.join(folder50, 'images');
     const folder50Labels = path.join(folder50, 'labels');
     if (await fs.pathExists(folder50Images)) {
@@ -981,7 +992,6 @@ ipcMain.handle('merge-three-step-annotations', async (event, { basePath, classNa
           await fs.copy(path.join(folder50Images, img), path.join(outputImagesPath, img));
           totalImages++;
           
-          // Copy corresponding label if exists
           const labelName = path.basename(img, path.extname(img)) + '.txt';
           const labelPath = path.join(folder50Labels, labelName);
           if (await fs.pathExists(labelPath)) {

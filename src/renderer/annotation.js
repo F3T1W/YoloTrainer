@@ -97,7 +97,6 @@ function init() {
         });
     }
     
-    // Load and display statistics
     updateStats();
     
     // Load admin mode state first (before three-step system, so it can affect its UI)
@@ -106,12 +105,8 @@ function init() {
     // Load three-step system state (this will also update UI with admin mode settings)
     loadThreeStepSystemState();
     
-    // Setup logo click handler for admin mode
     setupAdminModeToggle();
     
-    // ... rest of init
-    
-    // Load default classes or from localStorage
     const savedClasses = localStorage.getItem('yolo_classes');
     if (savedClasses) {
         try {
@@ -124,7 +119,6 @@ function init() {
         classes = [];
     }
     
-    // Load selected class from localStorage
     const savedSelectedClass = localStorage.getItem('yolo_selected_class');
     if (savedSelectedClass && classes.includes(savedSelectedClass)) {
         selectedClass = savedSelectedClass;
@@ -132,7 +126,6 @@ function init() {
         selectedClass = classes[0] || null;
     }
     
-    // Navigation - menu items
     document.querySelectorAll('.menu-item').forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
@@ -141,7 +134,6 @@ function init() {
         });
     });
     
-    // Listen for training progress
     ipcRenderer.on('training-progress', (event, data) => {
         const trainingOutput = document.getElementById('training-log');
         const trainingStatus = document.getElementById('training-status-badge');
@@ -279,10 +271,8 @@ function init() {
         });
     }
     
-    // Set initial active page
     showPage('home');
     
-    // Listen for progress updates
     ipcRenderer.on('download-progress', (event, data) => {
         const downloadLog = document.getElementById('download-log');
         const downloadProgress = document.getElementById('download-progress-container');
@@ -297,12 +287,10 @@ function init() {
             downloadProgress.style.display = 'block';
         }
         
-        // Try to parse progress from output
         const progressMatch = data.match(/(\d+)\/(\d+)/);
         if (progressMatch && downloadProgressBar) {
             const current = parseInt(progressMatch[1]);
             const total = parseInt(progressMatch[2]);
-            // Ensure we don't divide by zero
             const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
             
             console.log('Progress:', { current, total, percent });
@@ -445,26 +433,21 @@ function updateStepStatus(step, isReady) {
 }
 
 async function checkWorkflowStatus() {
-    // Check Download status - if we have images loaded or downloaded
     const hasImages = images.length > 0;
     updateStepStatus('download', hasImages);
     
-    // Check Classes status - if we have at least one class defined
     const hasClasses = classes.length > 0;
     updateStepStatus('classes', hasClasses);
     
-    // Check Annotate status - if we have dataset loaded and classes defined
     const hasDataset = currentDatasetPath !== null && images.length > 0;
     updateStepStatus('annotate', hasDataset && hasClasses);
     
-    // Check Train status - if we have annotated images (labels exist)
     let hasAnnotations = false;
     if (hasDataset && currentDatasetPath) {
         try {
             const labelsDir = path.join(currentDatasetPath, 'labels');
             const labelsExist = await ipcRenderer.invoke('file-exists', labelsDir);
             if (labelsExist) {
-                // Check if there are any label files
                 const labelFiles = await ipcRenderer.invoke('list-files', labelsDir);
                 hasAnnotations = labelFiles && labelFiles.length > 0;
             }
@@ -590,6 +573,8 @@ function getSelectedClass() {
     return selected ? selected.value : (classes[0] || 'Default');
 }
 
+let downloadInProgress = false;
+
 async function handleDownload(e) {
     if (e) e.preventDefault();
     console.log('handleDownload called');
@@ -599,6 +584,9 @@ async function handleDownload(e) {
     const limitInput = document.getElementById('image-limit');
     const outputDirInput = document.getElementById('download-path');
     const downloadBtn = document.getElementById('btn-start-download');
+    const pauseBtn = document.getElementById('btn-pause-download');
+    const resumeBtn = document.getElementById('btn-resume-download');
+    const stopBtn = document.getElementById('btn-stop-download');
     
     console.log('Inputs found:', {
         subreddit: !!subredditInput,
@@ -632,8 +620,11 @@ async function handleDownload(e) {
         return;
     }
     
-    downloadBtn.disabled = true;
-    downloadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Downloading...';
+    downloadInProgress = true;
+    downloadBtn.style.display = 'none';
+    if (pauseBtn) pauseBtn.style.display = 'inline-block';
+    if (stopBtn) stopBtn.style.display = 'inline-block';
+    if (resumeBtn) resumeBtn.style.display = 'none';
     
     const downloadProgress = document.getElementById('download-progress-container');
     if (downloadProgress) {
@@ -651,15 +642,19 @@ async function handleDownload(e) {
                 subreddit,
                 limit,
                 class_name: className,
-                output_dir: tempOutputDir
+                output_dir: tempOutputDir,
+                three_step_mode: true
             });
             
-            // Handle new return format (object with downloaded and test_downloaded) or old format (number)
+            // Check if download was stopped
+            if (result?.stopped) {
+                // Already handled by handleStopDownload, just return
+                return;
+            }
+            
             const downloadedCount = result?.downloaded || result || limit;
             const testDownloadedCount = result?.test_downloaded || 0;
             
-            // Distribute images to folders (15%, 35%, 50%)
-            // Use user-selected path if provided, otherwise use default
             const basePath = outputDir || await ipcRenderer.invoke('get-default-datasets-path');
             const sourcePath = await ipcRenderer.invoke('join-path', [tempOutputDir, className]);
             
@@ -671,7 +666,6 @@ async function handleDownload(e) {
                 userSelectedPath: outputDir
             });
             
-            // Check if source path exists
             const sourceExists = await ipcRenderer.invoke('file-exists', sourcePath);
             if (!sourceExists) {
                 console.error('Source path does not exist:', sourcePath);
@@ -691,12 +685,14 @@ async function handleDownload(e) {
                 
                 console.log('Distribution result:', distributionResult);
                 
-                // Copy FOR_TESTS folder from temp to class folder
-                const tempTestPath = await ipcRenderer.invoke('join-path', [tempOutputDir, 'FOR_TESTS']);
+                // FOR_TESTS should be inside class folder: tempOutputDir/CLASSNAME/FOR_TESTS
+                const tempTestPath = await ipcRenderer.invoke('join-path', [tempOutputDir, className, 'FOR_TESTS']);
                 const testPathExists = await ipcRenderer.invoke('file-exists', tempTestPath);
                 
                 if (testPathExists && distributionResult && distributionResult.basePath) {
-                    const targetTestPath = await ipcRenderer.invoke('join-path', [distributionResult.basePath, 'FOR_TESTS']);
+                    // FOR_TESTS should be inside class folder: basePath/CLASSNAME/FOR_TESTS
+                    const classFolderPath = await ipcRenderer.invoke('join-path', [distributionResult.basePath, className]);
+                    const targetTestPath = await ipcRenderer.invoke('join-path', [classFolderPath, 'FOR_TESTS']);
                     console.log('Copying FOR_TESTS folder from', tempTestPath, 'to', targetTestPath);
                     
                     try {
@@ -718,7 +714,6 @@ async function handleDownload(e) {
                     }
                 }
                 
-                // Clean up temp FOR_TESTS folder after copying
                 if (testPathExists) {
                     try {
                         await ipcRenderer.invoke('remove-folder', tempTestPath);
@@ -729,12 +724,10 @@ async function handleDownload(e) {
                     }
                 }
                 
-                // Verify that the class folder was created
                 if (distributionResult && distributionResult.basePath) {
                     const classFolderExists = await ipcRenderer.invoke('file-exists', distributionResult.basePath);
                     console.log('Class folder exists:', classFolderExists, 'at:', distributionResult.basePath);
                     
-                    // Verify subfolders
                     const folder15 = await ipcRenderer.invoke('join-path', [distributionResult.basePath, `${className}_15`]);
                     const folder15Exists = await ipcRenderer.invoke('file-exists', folder15);
                     console.log('Folder 15 exists:', folder15Exists, 'at:', folder15);
@@ -748,7 +741,6 @@ async function handleDownload(e) {
                     }
                 }
                 
-                // Save three-step system state
                 setThreeStepClassName(className);
                 if (distributionResult && distributionResult.basePath) {
                     setThreeStepBasePath(distributionResult.basePath);
@@ -763,7 +755,6 @@ async function handleDownload(e) {
                 
                 setThreeStepStage(1);
                 
-                // Auto-add class to classes list
                 if (!classes.includes(className)) {
                     classes.push(className);
                     selectedClass = className;
@@ -771,12 +762,10 @@ async function handleDownload(e) {
                     renderClasses();
                 }
                 
-                // Update statistics
                 incrementDatasets();
                 incrementImages(downloadedCount);
                 
                 showMessage('msg-download-complete', 'success');
-                // Auto-navigate to annotate page
                 setTimeout(() => {
                     showPage('annotate');
                     // Wait a bit more for page to be ready
@@ -792,17 +781,22 @@ async function handleDownload(e) {
                 return;
             }
         } else {
-            // Normal download
+            // Normal download (without three-step distribution)
             result = await ipcRenderer.invoke('download-reddit-images', {
             subreddit,
             limit,
             class_name: className,
-            output_dir: outputDir
+            output_dir: outputDir,
+            three_step_mode: false
         });
         
-            // Update statistics
+            // Check if download was stopped
+            if (result?.stopped) {
+                // Already handled by handleStopDownload, just return
+                return;
+            }
+        
             incrementDatasets();
-            // Handle new return format (object with downloaded and test_downloaded) or old format (number)
             const downloadedCount = result?.downloaded || result || limit;
             const testDownloadedCount = result?.test_downloaded || 0;
             incrementImages(downloadedCount);
@@ -811,20 +805,105 @@ async function handleDownload(e) {
         }
         
         downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
+        downloadBtn.style.display = 'inline-block';
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+        downloadInProgress = false;
         checkWorkflowStatus();
     } catch (e) {
         showMessage(`msg-download-error:${e.message}`, 'danger');
         downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-    } finally {
-        downloadBtn.disabled = false;
+        downloadBtn.style.display = 'inline-block';
+        const pauseBtn = document.getElementById('btn-pause-download');
+        const resumeBtn = document.getElementById('btn-resume-download');
+        const stopBtn = document.getElementById('btn-stop-download');
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+        downloadInProgress = false;
     }
 }
 
+async function handlePauseDownload(e) {
+    if (e) e.preventDefault();
+    const pauseBtn = document.getElementById('btn-pause-download');
+    const resumeBtn = document.getElementById('btn-resume-download');
+    
+    try {
+        const result = await ipcRenderer.invoke('pause-download');
+        if (result.success) {
+            if (pauseBtn) pauseBtn.style.display = 'none';
+            if (resumeBtn) resumeBtn.style.display = 'inline-block';
+            showMessage('msg-download-paused', 'warning');
+        }
+    } catch (e) {
+        console.error('Error pausing download:', e);
+    }
+}
+
+async function handleResumeDownload(e) {
+    if (e) e.preventDefault();
+    const pauseBtn = document.getElementById('btn-pause-download');
+    const resumeBtn = document.getElementById('btn-resume-download');
+    
+    try {
+        const result = await ipcRenderer.invoke('resume-download');
+        if (result.success) {
+            if (pauseBtn) pauseBtn.style.display = 'inline-block';
+            if (resumeBtn) resumeBtn.style.display = 'none';
+            showMessage('msg-download-resumed', 'success');
+        }
+    } catch (e) {
+        console.error('Error resuming download:', e);
+    }
+}
+
+async function handleStopDownload(e) {
+    if (e) e.preventDefault();
+    const downloadBtn = document.getElementById('btn-start-download');
+    const pauseBtn = document.getElementById('btn-pause-download');
+    const resumeBtn = document.getElementById('btn-resume-download');
+    const stopBtn = document.getElementById('btn-stop-download');
+    
+    try {
+        const result = await ipcRenderer.invoke('stop-download');
+        if (result.success) {
+            downloadInProgress = false;
+            downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
+            downloadBtn.style.display = 'inline-block';
+            if (pauseBtn) pauseBtn.style.display = 'none';
+            if (resumeBtn) resumeBtn.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            showMessage('msg-download-stopped', 'warning');
+        }
+    } catch (e) {
+        console.error('Error stopping download:', e);
+    }
+}
+
+window.handlePauseDownload = handlePauseDownload;
+window.handleResumeDownload = handleResumeDownload;
+window.handleStopDownload = handleStopDownload;
+
+async function openModelsFolder() {
+    try {
+        const result = await ipcRenderer.invoke('open-models-folder');
+        if (!result.success) {
+            console.error('Error opening models folder:', result.error);
+            showMessage(`msg-error-opening-folder:${result.error}`, 'danger');
+        }
+    } catch (e) {
+        console.error('Error opening models folder:', e);
+        showMessage(`msg-error-opening-folder:${e.message}`, 'danger');
+    }
+}
+
+window.openModelsFolder = openModelsFolder;
+
 function translateMessage(key, ...args) {
-    // Get current language
     const currentLang = localStorage.getItem('yolo_language') || 'en';
     
-    // Get translations object from window (it's defined in index.html)
     if (!window.translations || !window.translations[currentLang]) {
         return key; // Fallback to key if translations not available
     }
@@ -844,17 +923,14 @@ let activeToasts = [];
 const MAX_TOASTS = 3;
 
 function showMessage(message, type = 'info') {
-    // Check if message is a translation key (starts with 'msg-')
     let displayMessage = message;
     if (message.startsWith('msg-')) {
-        // Extract arguments if any (format: 'msg-key:arg1:arg2')
         const parts = message.split(':');
         const key = parts[0];
         const args = parts.slice(1);
         displayMessage = translateMessage(key, ...args);
     }
     
-    // Create toast notification
     const toastContainer = document.getElementById('toastContainer') || createToastContainer();
     
     // Remove oldest toast if we have reached the limit
@@ -884,7 +960,6 @@ function showMessage(message, type = 'info') {
     toastContainer.appendChild(toast);
     activeToasts.push(toast);
     
-    // Check if bootstrap is defined globally
     if (typeof bootstrap !== 'undefined') {
         const bsToast = new bootstrap.Toast(toast);
         bsToast.show();
@@ -932,7 +1007,7 @@ async function handleLoadDataset() {
     }
 }
 
-async function loadDataset(datasetPath) {
+async function loadDataset(datasetPath, showNotification = true) {
     currentDatasetPath = datasetPath;
     const datasetPathDisplay = document.getElementById('datasetPath');
     if (datasetPathDisplay) {
@@ -949,9 +1024,13 @@ async function loadDataset(datasetPath) {
     
     if (images.length > 0) {
         await loadImage(0);
-        showMessage(`msg-images-loaded:${images.length}`, 'success');
+        if (showNotification) {
+            showMessage(`msg-images-loaded:${images.length}`, 'success');
+        }
     } else {
-        showMessage('msg-no-images-found', 'warning');
+        if (showNotification) {
+            showMessage('msg-no-images-found', 'warning');
+        }
     }
     
     updateProgress();
@@ -965,7 +1044,6 @@ async function loadImage(index) {
     
     currentImageIndex = index;
     
-    // Update header counter
     const imageCounter = document.getElementById('image-counter');
     const currentFileName = document.getElementById('current-file-name');
     
@@ -973,9 +1051,8 @@ async function loadImage(index) {
         imageCounter.textContent = `${index + 1} / ${images.length}`;
     }
     
-    updateNavigationButtons(); // Update buttons visibility
+    updateNavigationButtons();
     
-    // Determine path based on folder structure
     const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(currentDatasetPath, 'images'));
     
     let imagePath;
@@ -993,53 +1070,41 @@ async function loadImage(index) {
         currentFileName.textContent = images[index];
     }
     
-    // Load image
     currentImage = new Image();
     
     // Convert path to file URL to ensure it loads correctly in Electron
-    // Use file:// protocol explicitly
     const fileUrl = 'file://' + imagePath.replace(/\\/g, '/');
     currentImage.src = fileUrl;
     
-    console.log('Loading image from:', fileUrl); // Debug log
+    console.log('Loading image from:', fileUrl);
     
-    // ... rest of function
     currentImage.onload = () => {
-        // Hide placeholder text
         const placeholderText = document.getElementById('placeholder-text');
         if (placeholderText) {
             placeholderText.style.display = 'none';
         }
 
-        // Get container dimensions
         const container = document.getElementById('annotation-container');
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
 
-        // Calculate scale to fit image within container
         let scale = Math.min(containerWidth / currentImage.width, containerHeight / currentImage.height);
-        
-        // Use 90% of available space to add some padding
         scale = scale * 0.95;
 
         canvas.width = currentImage.width * scale;
         canvas.height = currentImage.height * scale;
         
-        // Store scale for coordinate conversion
         imageScale = scale;
         
         drawImage();
         loadAnnotations().then(() => {
             updateProgress();
             
-            // Auto-label if toggle is enabled
             const autoLabelBtn = document.getElementById('btn-auto-label');
             if (autoLabelBtn && autoLabelBtn.classList.contains('active')) {
-                // Small delay to ensure image is fully loaded
                 setTimeout(() => {
-                    handleAutoLabel(true); // Pass true to indicate auto-triggered
+                    handleAutoLabel(true);
                     
-                    // Three-step system stage 3: auto-advance after auto-label
                     if (threeStepSystemEnabled && getThreeStepStage() === 3) {
                         setTimeout(() => {
                             if (currentImageIndex < images.length - 1) {
@@ -1108,13 +1173,25 @@ function drawImage() {
 }
 
 async function loadAnnotations() {
-    // Load existing annotations from label file
     currentAnnotations = [];
     
     if (currentDatasetPath && images.length > 0) {
         try {
-            const imagePath = path.join(currentDatasetPath, 'images', images[currentImageIndex]);
-            const datasetDir = path.dirname(path.dirname(imagePath));
+            const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(currentDatasetPath, 'images'));
+            let imagePath;
+            if (hasImagesSubdir) {
+                imagePath = path.join(currentDatasetPath, 'images', images[currentImageIndex]);
+            } else {
+                imagePath = path.join(currentDatasetPath, images[currentImageIndex]);
+            }
+            
+            // Labels should be in the same directory as images (or parent if images is subfolder)
+            let datasetDir;
+            if (hasImagesSubdir) {
+                datasetDir = path.dirname(path.dirname(imagePath)); // CLASSNAME/images -> CLASSNAME
+            } else {
+                datasetDir = path.dirname(imagePath); // CLASSNAME -> CLASSNAME
+            }
             const labelsDir = path.join(datasetDir, 'labels');
             const imageName = path.basename(imagePath, path.extname(imagePath));
             const labelPath = path.join(labelsDir, `${imageName}.txt`);
@@ -1280,8 +1357,6 @@ async function saveAnnotation() {
     // }
     
     const imagePath = path.join(currentDatasetPath, 'images', images[currentImageIndex]);
-    // Determine path based on where we loaded from (simplified logic for now)
-    // In a real app we should store the full path of each image in the images array or a separate map
     let targetPath;
     if (currentDatasetPath) {
          // Re-construct the path used in loadImage - ideally we should store it
@@ -1304,18 +1379,13 @@ async function saveAnnotation() {
         
         showMessage('msg-annotation-saved', 'success');
         
-        // Update workflow status
         checkWorkflowStatus();
         
-        // Clear annotations for the next image
-        currentAnnotations = []; // IMPORTANT: Clear current annotations
+        currentAnnotations = [];
         
-        // Three-step system: check if stage 3 and auto-advance
         if (threeStepSystemEnabled && getThreeStepStage() === 3) {
-            // Stage 3: auto-advance to next image
             const autoBtn = document.getElementById('btn-auto-label');
             if (autoBtn && autoBtn.classList.contains('active')) {
-                // Auto mode is on, advance automatically
                 setTimeout(() => {
                     navigateImage(1);
                 }, 500);
@@ -1323,7 +1393,6 @@ async function saveAnnotation() {
                 navigateImage(1);
             }
         } else {
-        // Move to next
         navigateImage(1);
         }
     } catch (e) {
@@ -1338,16 +1407,13 @@ function toggleAutoLabel() {
     const isActive = btn.classList.contains('active');
     
     if (isActive) {
-        // Turn off
         btn.classList.remove('active');
         btn.classList.remove('btn-warning');
         btn.classList.add('btn-outline-warning');
     } else {
-        // Turn on
         btn.classList.add('active');
         btn.classList.remove('btn-outline-warning');
         btn.classList.add('btn-warning');
-        // Immediately run auto-label on current image
         if (currentImage) {
             handleAutoLabel(true);
         }
@@ -1373,7 +1439,6 @@ async function handleAutoLabel(autoTriggered = false) {
     }
 
     try {
-        // Get path to best.pt
         // Three-step system: use saved model path if available
         let modelPath;
         if (threeStepSystemEnabled && threeStepModelPath) {
@@ -1393,16 +1458,12 @@ async function handleAutoLabel(autoTriggered = false) {
              return;
         }
 
-        // Current image path
         // We need the file system path, not the file:// URL
-        // We can reconstruct it from the logic in loadImage or just strip file://
         let imagePath = currentImage.src;
         if (imagePath.startsWith('file://')) {
-            // decodeURIComponent is important for spaces/special chars
             imagePath = decodeURIComponent(imagePath.slice(7));
         }
 
-        // Run prediction
         const confInput = document.getElementById('auto-label-conf');
         const confidence = confInput ? parseFloat(confInput.value) : 0.25;
         
@@ -1414,10 +1475,7 @@ async function handleAutoLabel(autoTriggered = false) {
 
         if (result.success && result.detections) {
             const newAnnotations = result.detections.map(d => {
-                // Ensure class exists in our list, if not add it or map to 'Unknown'
                 if (!classes.includes(d.class_name)) {
-                    // Option: Add it? Or just warn?
-                    // For now, let's keep it.
                 }
 
                 return {
@@ -1492,6 +1550,9 @@ async function startTraining() {
     let datasetPath;
     let epochs, batchSize, imgSize;
     
+    let modelClassName = null;
+    let modelLearningPercent = 100;
+    
     if (threeStepSystemEnabled) {
         // Three-step system: use configured paths
         // Reload state to ensure we have latest values
@@ -1501,11 +1562,14 @@ async function startTraining() {
         const stage = getThreeStepStage();
         console.log('Start training for three-step system, stage:', stage);
         
+        modelClassName = threeStepClassName;
+        
         if (stage === 3.5) {
             // Final training: use CLASSNAME_100 folder
             const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
             datasetPath = folder100;
             epochs = 100;
+            modelLearningPercent = 100;
             console.log('Final training path:', folder100);
         } else {
             // Stage 1.5 or 2.5: use current stage folder
@@ -1516,17 +1580,15 @@ async function startTraining() {
             const folderName = `${threeStepClassName}_${stageNum === 1 ? '15' : '35'}`;
             const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
             datasetPath = stagePath;
+            modelLearningPercent = stageNum === 1 ? 15 : 35;
             console.log('Training path for stage', stage, ':', stagePath, '(folder:', folderName, ')');
             epochs = parseInt(document.getElementById('epochs')?.value || 50);
-            // Validate epochs range
             if (epochs < 50) epochs = 50;
             if (epochs > 100) epochs = 100;
         }
         batchSize = 16;
         imgSize = 640;
     } else {
-        // Normal flow
-    // Auto-fill path if empty and we have a current one
     if (trainDatasetPath && !trainDatasetPath.value && currentDatasetPath) {
         trainDatasetPath.value = currentDatasetPath;
     }
@@ -1561,13 +1623,19 @@ async function startTraining() {
         trainingOutput.innerHTML = '<div class="text-success">> Initializing training sequence...</div>';
     }
     
+    if (!modelClassName) {
+        modelClassName = selectedClass || (classes.length > 0 ? classes[0] : null);
+    }
+    
     try {
         await ipcRenderer.invoke('train-model', {
             datasetPath: datasetPath,
             epochs,
             batchSize,
             imgSize,
-            classNames: classes // Pass global classes array
+            classNames: classes,
+            className: modelClassName,
+            learningPercent: modelLearningPercent
         });
         
         showMessage('msg-training-complete', 'success');
@@ -1638,7 +1706,6 @@ async function startTraining() {
 }
 
 function updateStats() {
-    // Load statistics from localStorage
     const statDatasets = document.getElementById('stat-datasets');
     const statImages = document.getElementById('stat-images');
     const statModels = document.getElementById('stat-models');
@@ -1726,7 +1793,6 @@ async function loadTestImage(index) {
     
     testCurrentImageIndex = index;
     
-    // Update header counter
     const testImageCounter = document.getElementById('test-image-counter');
     const testCurrentFileName = document.getElementById('test-current-file-name');
     
@@ -1736,7 +1802,6 @@ async function loadTestImage(index) {
     
     updateTestNavigationButtons();
     
-    // Determine path based on folder structure
     const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
     
     let imagePath;
@@ -1754,45 +1819,37 @@ async function loadTestImage(index) {
         testCurrentFileName.textContent = testImages[index];
     }
     
-    // Load image
     testCurrentImage = new Image();
     const fileUrl = 'file://' + imagePath.replace(/\\/g, '/');
     testCurrentImage.src = fileUrl;
     
     testCurrentImage.onload = async () => {
-        // Hide placeholder
         const placeholderText = document.getElementById('test-placeholder-text');
         if (placeholderText) {
             placeholderText.style.display = 'none';
         }
         
-        // Get canvas
         if (!testCanvas) {
             testCanvas = document.getElementById('test-canvas');
             testCtx = testCanvas.getContext('2d');
         }
         
-        // Get container dimensions
         const container = document.getElementById('test-container');
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
         
-        // Calculate scale to fit image within container
         let scale = Math.min(containerWidth / testCurrentImage.width, containerHeight / testCurrentImage.height);
-        scale = scale * 0.95; // Use 95% of available space
+        scale = scale * 0.95;
         
         const displayWidth = testCurrentImage.width * scale;
         const displayHeight = testCurrentImage.height * scale;
         
-        // Set canvas size
         testCanvas.width = displayWidth;
         testCanvas.height = displayHeight;
         
-        // Draw image
         testCtx.clearRect(0, 0, testCanvas.width, testCanvas.height);
         testCtx.drawImage(testCurrentImage, 0, 0, displayWidth, displayHeight);
         
-        // Auto-run prediction if model is selected
         const modelPath = document.getElementById('test-model-path')?.value;
         if (modelPath) {
             await runTestPrediction(imagePath);
@@ -1872,10 +1929,8 @@ async function runTestPrediction(imagePath) {
                 testCtx.clearRect(0, 0, testCanvas.width, testCanvas.height);
                 testCtx.drawImage(resultImg, 0, 0, displayWidth, displayHeight);
                 
-                // Hide spinner
                 if (spinner) spinner.style.display = 'none';
                 
-                // Show detection info
                 if (result.detections && result.detections.length > 0) {
                     const detectionsCount = document.getElementById('test-detections-count');
                     if (detectionsCount) {
@@ -1926,7 +1981,6 @@ async function runTestPrediction(imagePath) {
     }
 }
 
-// Update selectModelFile to trigger prediction if image is loaded
 window.selectModelFile = async function() {
     const filePath = await ipcRenderer.invoke('select-file', [
         { name: 'YOLO Model', extensions: ['pt'] }
@@ -1935,7 +1989,6 @@ window.selectModelFile = async function() {
         const modelPathInput = document.getElementById('test-model-path');
         if (modelPathInput) {
             modelPathInput.value = filePath;
-            // If we have a loaded image, run prediction
             if (testCurrentImageIndex >= 0 && testImages.length > 0) {
                 const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
                 let imagePath;
@@ -1961,7 +2014,6 @@ window.useBaseModel = async function() {
         if (modelPathInput) {
             modelPathInput.value = basePath;
             showMessage('msg-base-model-selected', 'info');
-            // If we have a loaded image, run prediction
             if (testCurrentImageIndex >= 0 && testImages.length > 0) {
                 const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
                 let imagePath;
@@ -2212,9 +2264,9 @@ async function setupThreeStepAnnotation() {
         loadDatasetBtn.style.opacity = '0.6';
     }
     
-    // Auto-load dataset
+    // Auto-load dataset (without notification on startup)
     try {
-        await loadDataset(stagePath);
+        await loadDataset(stagePath, false);
     } catch (error) {
         console.error('Error loading dataset:', error);
         showMessage(`msg-load-error:${error.message}`, 'danger');

@@ -103,7 +103,7 @@ def split_dataset(raw_path, dataset_path, train_ratio=0.8):
     for img in val_images:
         copy_pair(img, 'val')
 
-def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir, device='auto', workers=8):
+def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir, device='auto', workers=8, model_class_name=None, model_learning_percent=100):
     """
     Train YOLOv8 model with platform-specific optimizations
     """
@@ -195,31 +195,41 @@ def train_yolo_model(data_yaml, epochs, batch_size, img_size, output_dir, device
     best_model = output_dir / 'custom_model' / 'weights' / 'best.pt'
     print(f"Training complete! Best model saved at: {best_model}", flush=True)
     
-    # Also save a copy with unique name (timestamp + classes) for history
+    # Also save a copy with unique name: CLASSNAME_LEARNINGPERCENT_DATE.pt
     if best_model.exists():
         # Create models_history directory
         history_dir = output_dir / 'models_history'
         history_dir.mkdir(parents=True, exist_ok=True)
         
-        # Generate unique filename: YYYYMMDD_HHMMSS_classes.pt
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        # Get class names from data_yaml if available
-        class_suffix = ''
-        try:
-            if isinstance(data_yaml, (str, Path)):
-                with open(data_yaml, 'r') as f:
-                    data = yaml.safe_load(f)
-                    if 'names' in data:
-                        classes = data['names']
-                        # Create short class name (first 3 classes or first 20 chars)
-                        if isinstance(classes, list):
-                            class_suffix = '_' + '_'.join([c[:10] for c in classes[:3]]).replace(' ', '_')
-                        elif isinstance(classes, dict):
-                            class_suffix = '_' + '_'.join([str(v)[:10] for v in list(classes.values())[:3]]).replace(' ', '_')
-        except:
-            pass
+        # Format: CLASSNAME_LEARNINGPERCENT_DATE.pt
+        # Get class name
+        class_name = model_class_name or 'Unknown'
+        if not class_name or class_name == 'Unknown':
+            # Try to get from data_yaml
+            try:
+                if isinstance(data_yaml, (str, Path)):
+                    with open(data_yaml, 'r') as f:
+                        data = yaml.safe_load(f)
+                        if 'names' in data:
+                            classes = data['names']
+                            if isinstance(classes, list) and len(classes) > 0:
+                                class_name = classes[0]
+                            elif isinstance(classes, dict) and len(classes) > 0:
+                                class_name = list(classes.values())[0]
+            except:
+                pass
         
-        unique_name = f"{timestamp}{class_suffix}.pt"
+        # Clean class name (remove spaces, special chars)
+        class_name_clean = class_name.replace(' ', '_').replace('/', '_').replace('\\', '_')[:30]
+        
+        # Learning percent (100 for normal, 15/35/50 for three-step)
+        learning_percent_str = f"{model_learning_percent}"
+        
+        # Date: YYYYMMDD_HHMMSS
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Final format: CLASSNAME_LEARNINGPERCENT_DATE.pt
+        unique_name = f"{class_name_clean}_{learning_percent_str}_{timestamp}.pt"
         history_model = history_dir / unique_name
         
         # Copy best model to history
@@ -238,6 +248,8 @@ if __name__ == "__main__":
     parser.add_argument('--class-names', required=True, help='Comma separated class names')
     parser.add_argument('--device', type=str, default='auto', help='Device: auto, mps, cuda, or cpu')
     parser.add_argument('--workers', type=int, default=8, help='Number of data loading workers')
+    parser.add_argument('--model-class-name', type=str, default=None, help='Class name for model filename')
+    parser.add_argument('--model-learning-percent', type=int, default=100, help='Learning percent for model filename (15, 35, 50, or 100)')
     
     args = parser.parse_args()
     
@@ -246,8 +258,8 @@ if __name__ == "__main__":
     print(f"Classes: {class_names}", flush=True)
     
     # Create dataset structure
-    # We create a temporary formatted dataset next to the raw data
-    dataset_path = Path(args.data).parent / 'yolo_formatted_dataset'
+    # We create a temporary formatted dataset inside the class folder
+    dataset_path = Path(args.data) / 'yolo_formatted_dataset'
     
     # Clean up previous run
     if dataset_path.exists():
@@ -261,4 +273,6 @@ if __name__ == "__main__":
     
     # Train with device and workers parameters
     train_yolo_model(yaml_path, args.epochs, args.batch, args.img, args.output, 
-                     device=args.device, workers=args.workers)
+                     device=args.device, workers=args.workers,
+                     model_class_name=args.model_class_name,
+                     model_learning_percent=args.model_learning_percent)
