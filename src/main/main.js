@@ -167,6 +167,11 @@ if (updaterAvailable && autoUpdater) {
 }
 
 // IPC Handlers
+
+/**
+ * Opens a dialog to select a dataset folder.
+ * @returns {Promise<string|null>} The selected folder path, or null if canceled.
+ */
 ipcMain.handle('select-dataset-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory']
@@ -174,6 +179,12 @@ ipcMain.handle('select-dataset-folder', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+/**
+ * Loads image files from a dataset folder.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {string} datasetPath - Path to the dataset folder.
+ * @returns {Promise<string[]>} Array of image filenames (jpg, jpeg, png, webp).
+ */
 ipcMain.handle('load-dataset', async (event, datasetPath) => {
   try {
     const imagesPath = path.join(datasetPath, 'images');
@@ -195,6 +206,21 @@ let currentDownloadProcess = null;
 let downloadPaused = false;
 let downloadStopped = false;
 
+/**
+ * Downloads images from a Reddit subreddit.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Download parameters.
+ * @param {string} params.subreddit - Name of the subreddit to download from.
+ * @param {number} params.limit - Maximum number of images to download.
+ * @param {string} params.class_name - Class name for organizing downloaded images.
+ * @param {string} [params.output_dir] - Output directory path. Defaults to datasets/raw.
+ * @param {boolean} [params.three_step_mode] - Enable three-step distribution mode.
+ * @returns {Promise<Object>} Result object with success status, message, and downloaded count.
+ * @returns {boolean} returns.success - Whether the download completed successfully.
+ * @returns {string} returns.message - Output message from the download script.
+ * @returns {number} returns.downloaded - Number of images downloaded.
+ * @returns {boolean} [returns.stopped] - Whether the download was stopped by user.
+ */
 ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class_name, output_dir, three_step_mode }) => {
   return new Promise((resolve, reject) => {
     downloadPaused = false;
@@ -269,6 +295,12 @@ ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class
   });
 });
 
+/**
+ * Pauses the current Reddit image download process.
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether the pause operation succeeded.
+ * @returns {string} [returns.error] - Error message if pause failed.
+ */
 ipcMain.handle('pause-download', async () => {
   if (currentDownloadProcess && !downloadStopped) {
     downloadPaused = true;
@@ -282,6 +314,12 @@ ipcMain.handle('pause-download', async () => {
   return { success: false, error: 'No active download' };
 });
 
+/**
+ * Resumes a paused Reddit image download process.
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether the resume operation succeeded.
+ * @returns {string} [returns.error] - Error message if resume failed.
+ */
 ipcMain.handle('resume-download', async () => {
   if (currentDownloadProcess && !downloadStopped && downloadPaused) {
     downloadPaused = false;
@@ -293,6 +331,12 @@ ipcMain.handle('resume-download', async () => {
   return { success: false, error: 'No paused download' };
 });
 
+/**
+ * Stops the current Reddit image download process.
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether the stop operation succeeded.
+ * @returns {string} [returns.error] - Error message if stop failed.
+ */
 ipcMain.handle('stop-download', async () => {
   if (currentDownloadProcess) {
     downloadStopped = true;
@@ -304,6 +348,12 @@ ipcMain.handle('stop-download', async () => {
   return { success: false, error: 'No active download' };
 });
 
+/**
+ * Opens the models history folder in the system file manager.
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether the folder was opened successfully.
+ * @returns {string} [returns.error] - Error message if opening failed.
+ */
 ipcMain.handle('open-models-folder', async () => {
   const { shell } = require('electron');
   const modelsHistoryPath = path.join(__dirname, '../../models/models_history');
@@ -318,18 +368,48 @@ ipcMain.handle('open-models-folder', async () => {
   }
 });
 
+/**
+ * Gets the default temporary directory path for downloads.
+ * @returns {Promise<string>} Path to the temporary directory.
+ */
 ipcMain.handle('get-default-temp-path', async () => {
   return path.join(__dirname, '../../datasets/temp');
 });
 
+/**
+ * Gets the default datasets directory path.
+ * @returns {Promise<string>} Path to the datasets directory.
+ */
 ipcMain.handle('get-default-datasets-path', async () => {
   return path.join(__dirname, '../../datasets/raw');
 });
 
+/**
+ * Joins multiple path segments into a single path.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {string[]} paths - Array of path segments to join.
+ * @returns {Promise<string>} The joined path.
+ */
 ipcMain.handle('join-path', async (event, paths) => {
   return path.join(...paths);
 });
 
+/**
+ * Distributes downloaded images into three-step folders (15%, 35%, 50%).
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Distribution parameters.
+ * @param {string} params.sourcePath - Path to the source folder with downloaded images.
+ * @param {string} params.basePath - Base path where class folders will be created.
+ * @param {string} params.className - Name of the class (used for folder naming).
+ * @param {number} params.totalCount - Total number of images to distribute.
+ * @returns {Promise<Object>} Result object with distribution details.
+ * @returns {boolean} returns.success - Whether distribution succeeded.
+ * @returns {string} returns.basePath - Path to the created class folder.
+ * @returns {Object} returns.counts - Distribution counts per folder.
+ * @returns {number} returns.counts.folder15 - Number of images in 15% folder.
+ * @returns {number} returns.counts.folder35 - Number of images in 35% folder.
+ * @returns {number} returns.counts.folder50 - Number of images in 50% folder.
+ */
 ipcMain.handle('distribute-three-step-images', async (event, { sourcePath, basePath, className, totalCount }) => {
   try {
     const fs = require('fs-extra');
@@ -414,6 +494,12 @@ ipcMain.handle('distribute-three-step-images', async (event, { sourcePath, baseP
   }
 });
 
+/**
+ * Checks if a file or directory exists.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {string} filePath - Path to check.
+ * @returns {Promise<boolean>} True if the path exists, false otherwise.
+ */
 ipcMain.handle('file-exists', async (event, filePath) => {
   try {
     return await fs.pathExists(filePath);
@@ -422,6 +508,12 @@ ipcMain.handle('file-exists', async (event, filePath) => {
   }
 });
 
+/**
+ * Gets a list of image files from a dataset folder.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {string} datasetPath - Path to the dataset folder.
+ * @returns {Promise<string[]>} Array of image filenames (jpg, jpeg, png, webp).
+ */
 ipcMain.handle('get-images-list', async (event, datasetPath) => {
   try {
     const imagesPath = path.join(datasetPath, 'images');
@@ -433,6 +525,22 @@ ipcMain.handle('get-images-list', async (event, datasetPath) => {
   }
 });
 
+/**
+ * Saves annotation data to a YOLO format label file.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Annotation parameters.
+ * @param {string} params.imagePath - Path to the annotated image.
+ * @param {Array<Object>} params.annotations - Array of annotation objects.
+ * @param {string} params.annotations[].className - Class name for the annotation.
+ * @param {number} params.annotations[].centerX - Normalized center X coordinate (0-1).
+ * @param {number} params.annotations[].centerY - Normalized center Y coordinate (0-1).
+ * @param {number} params.annotations[].width - Normalized width (0-1).
+ * @param {number} params.annotations[].height - Normalized height (0-1).
+ * @param {string[]} params.classNames - Array of all class names (for class ID mapping).
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether the annotation was saved successfully.
+ * @returns {string} [returns.error] - Error message if save failed.
+ */
 ipcMain.handle('save-annotation', async (event, { imagePath, annotations, classNames }) => {
   try {
     // Determine labels directory based on image path structure
@@ -465,6 +573,21 @@ ipcMain.handle('save-annotation', async (event, { imagePath, annotations, classN
   }
 });
 
+/**
+ * Trains a YOLOv8 model with the specified dataset and parameters.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Training parameters.
+ * @param {string} params.datasetPath - Path to the YOLO formatted dataset.
+ * @param {number} params.epochs - Number of training epochs.
+ * @param {number} params.batchSize - Batch size for training.
+ * @param {number} params.imgSize - Image size for training (e.g., 640).
+ * @param {string[]} params.classNames - Array of class names.
+ * @param {string} [params.className] - Class name for model filename.
+ * @param {number} [params.learningPercent] - Learning percentage for model filename (15, 35, 50, or 100).
+ * @returns {Promise<Object>} Result object with success status and training output.
+ * @returns {boolean} returns.success - Whether training completed successfully.
+ * @returns {string} returns.message - Training output/logs.
+ */
 ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, imgSize, classNames, className, learningPercent }) => {
   return new Promise((resolve, reject) => {
     const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
@@ -534,6 +657,16 @@ ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, im
   });
 });
 
+/**
+ * Exports a trained model to CodeSlave directory.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Export parameters.
+ * @param {string} params.modelPath - Path to the model file (.pt).
+ * @param {string} [params.outputPath] - Output path (currently unused, uses CodeSlave path).
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether export succeeded.
+ * @returns {string} [returns.error] - Error message if export failed.
+ */
 ipcMain.handle('export-model', async (event, { modelPath, outputPath }) => {
   try {
     const targetPath = path.join(__dirname, '../../../CodeSlave/python_bridge/custom_models');
@@ -545,6 +678,12 @@ ipcMain.handle('export-model', async (event, { modelPath, outputPath }) => {
   }
 });
 
+/**
+ * Reads the contents of a text file.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {string} filePath - Path to the file to read.
+ * @returns {Promise<string>} File contents as UTF-8 string, or empty string on error.
+ */
 ipcMain.handle('read-file', async (event, filePath) => {
   try {
     return await fs.readFile(filePath, 'utf-8');
@@ -553,10 +692,18 @@ ipcMain.handle('read-file', async (event, filePath) => {
   }
 });
 
+/**
+ * Gets the path to the base YOLOv8n model file.
+ * @returns {string} Path to yolov8n.pt.
+ */
 ipcMain.handle('get-base-model-path', () => {
   return path.join(__dirname, '../../yolov8n.pt');
 });
 
+/**
+ * Gets the path to the most recently trained model (best.pt).
+ * @returns {Promise<string|null>} Path to best.pt, or null if not found.
+ */
 ipcMain.handle('get-trained-model-path', async () => {
   const modelPath = path.join(__dirname, '../../models/custom_model/weights/best.pt');
   try {
@@ -567,6 +714,12 @@ ipcMain.handle('get-trained-model-path', async () => {
   return null;
 });
 
+/**
+ * Lists .txt files in a directory (typically label files).
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {string} dirPath - Path to the directory.
+ * @returns {Promise<string[]>} Array of .txt filenames, or empty array on error.
+ */
 ipcMain.handle('list-files', async (event, dirPath) => {
   try {
     const exists = await fs.pathExists(dirPath);
@@ -578,6 +731,12 @@ ipcMain.handle('list-files', async (event, dirPath) => {
   }
 });
 
+/**
+ * Opens a dialog to select a file.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Array<Object>} [filters] - File type filters (e.g., [{ name: 'YOLO Model', extensions: ['pt'] }]).
+ * @returns {Promise<string|null>} Selected file path, or null if canceled.
+ */
 ipcMain.handle('select-file', async (event, filters) => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
@@ -586,6 +745,22 @@ ipcMain.handle('select-file', async (event, filters) => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+/**
+ * Runs object detection on an image using a trained YOLO model.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Prediction parameters.
+ * @param {string} params.modelPath - Path to the model file (.pt).
+ * @param {string} params.imagePath - Path to the image file.
+ * @param {number} [params.conf] - Confidence threshold (0-1). Defaults to 0.25.
+ * @returns {Promise<Object>} Result object with detection results.
+ * @returns {boolean} returns.success - Whether prediction succeeded.
+ * @returns {string} returns.resultPath - Path to the annotated result image.
+ * @returns {string} returns.output - Raw output from prediction script.
+ * @returns {Array<Object>} returns.detections - Array of detected objects.
+ * @returns {string} returns.detections[].class_name - Detected class name.
+ * @returns {number} returns.detections[].confidence - Detection confidence (0-1).
+ * @returns {Array<number>} returns.detections[].bbox - Bounding box coordinates [x1, y1, x2, y2].
+ */
 ipcMain.handle('predict-image', async (event, { modelPath, imagePath, conf }) => {
   return new Promise((resolve, reject) => {
     const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
@@ -645,6 +820,16 @@ ipcMain.handle('predict-image', async (event, { modelPath, imagePath, conf }) =>
   });
 });
 
+/**
+ * Copies a folder and its contents to a destination.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Copy parameters.
+ * @param {string} params.source - Source folder path.
+ * @param {string} params.destination - Destination folder path.
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether copy succeeded.
+ * @returns {string} [returns.error] - Error message if copy failed.
+ */
 ipcMain.handle('copy-folder', async (event, { source, destination }) => {
   try {
     const fs = require('fs-extra');
@@ -673,6 +858,14 @@ ipcMain.handle('copy-folder', async (event, { source, destination }) => {
   }
 });
 
+/**
+ * Removes a folder and its contents.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {string} folderPath - Path to the folder to remove.
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether removal succeeded.
+ * @returns {string} [returns.error] - Error message if removal failed.
+ */
 ipcMain.handle('remove-folder', async (event, folderPath) => {
   try {
     const fs = require('fs-extra');
@@ -702,6 +895,14 @@ function getVenvPath() {
   }
 }
 
+/**
+ * Checks the status of Python installation and virtual environment.
+ * @returns {Promise<Object>} Status object with Python information.
+ * @returns {boolean} returns.pythonInstalled - Whether Python is installed.
+ * @returns {string|null} returns.pythonVersion - Python version string, or null if not installed.
+ * @returns {boolean} returns.venvExists - Whether virtual environment exists.
+ * @returns {boolean} returns.packagesInstalled - Whether required packages (ultralytics) are installed.
+ */
 ipcMain.handle('check-python-status', async () => {
   const { exec } = require('child_process');
   const { promisify } = require('util');
@@ -750,6 +951,12 @@ ipcMain.handle('check-python-status', async () => {
   }
 });
 
+/**
+ * Sets up Python virtual environment for the application.
+ * @returns {Promise<Object>} Result object with success status and logs.
+ * @returns {boolean} returns.success - Whether setup succeeded.
+ * @returns {string} returns.logs - Setup process logs.
+ */
 ipcMain.handle('setup-python-environment', async () => {
   const { exec } = require('child_process');
   const { promisify } = require('util');
@@ -792,6 +999,12 @@ ipcMain.handle('setup-python-environment', async () => {
   }
 });
 
+/**
+ * Checks for application updates (currently disabled).
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether check was initiated.
+ * @returns {string} [returns.error] - Error message if check failed.
+ */
 ipcMain.handle('check-for-updates', async () => {
   if (!updaterAvailable || !autoUpdater) {
     return { success: false, error: 'Auto-updater not available. Install electron-updater package.' };
@@ -805,6 +1018,12 @@ ipcMain.handle('check-for-updates', async () => {
   }
 });
 
+/**
+ * Downloads an available update (currently disabled).
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether download was initiated.
+ * @returns {string} [returns.error] - Error message if download failed.
+ */
 ipcMain.handle('download-update', async () => {
   if (!updaterAvailable || !autoUpdater) {
     return { success: false, error: 'Auto-updater not available. Install electron-updater package.' };
@@ -818,6 +1037,13 @@ ipcMain.handle('download-update', async () => {
   }
 });
 
+/**
+ * Installs a downloaded update (currently disabled).
+ * @returns {Promise<Object>} Result object with success status.
+ * @returns {boolean} returns.success - Whether installation was initiated.
+ * @returns {string} [returns.error] - Error message if installation failed.
+ * @returns {boolean} [returns.manualInstall] - Whether manual installation is required (macOS unsigned apps).
+ */
 ipcMain.handle('install-update', async () => {
   if (!updaterAvailable || !autoUpdater) {
     return { success: false, error: 'Auto-updater not available. Install electron-updater package.' };
@@ -846,6 +1072,12 @@ ipcMain.handle('install-update', async () => {
   }
 });
 
+/**
+ * Installs Python packages from requirements.txt into the virtual environment.
+ * @returns {Promise<Object>} Result object with success status and logs.
+ * @returns {boolean} returns.success - Whether installation succeeded.
+ * @returns {string} returns.logs - Installation process logs.
+ */
 ipcMain.handle('install-python-packages', async () => {
   const { exec } = require('child_process');
   const { promisify } = require('util');
@@ -926,6 +1158,18 @@ ipcMain.handle('install-python-packages', async () => {
   }
 });
 
+/**
+ * Merges annotations from three-step folders (15, 35, 50) into a single output folder.
+ * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
+ * @param {Object} params - Merge parameters.
+ * @param {string} params.basePath - Base path containing the three-step folders.
+ * @param {string} params.className - Class name (used to locate folders: className_15, className_35, className_50).
+ * @param {string} params.outputFolder - Output folder path where merged images and labels will be saved.
+ * @returns {Promise<Object>} Result object with merge statistics.
+ * @returns {boolean} returns.success - Whether merge succeeded.
+ * @returns {number} returns.totalImages - Total number of images merged.
+ * @returns {number} returns.totalLabels - Total number of labels merged.
+ */
 ipcMain.handle('merge-three-step-annotations', async (event, { basePath, className, outputFolder }) => {
   try {
     const fs = require('fs-extra');

@@ -32,6 +32,10 @@ if (document.readyState === 'loading') {
     init();
 }
 
+/**
+ * Initializes the annotation application.
+ * Sets up keyboard shortcuts, event listeners, and loads initial state.
+ */
 function init() {
     console.log('Annotation script initialized');
     
@@ -324,6 +328,10 @@ function init() {
     checkWorkflowStatus();
 }
 
+/**
+ * Opens a dialog to select the download output directory.
+ * Updates the download path input field with the selected path.
+ */
 async function handleSelectDownloadPath() {
     try {
         const result = await ipcRenderer.invoke('select-dataset-folder');
@@ -372,7 +380,10 @@ let workflowStatus = {
     train: false
 };
 
-// Navigation
+/**
+ * Shows a specific page and updates navigation menu.
+ * @param {string} pageName - Name of the page to show ('home', 'download', 'classes', 'annotate', 'train', 'test', 'settings').
+ */
 function showPage(pageName) {
     // Hide all pages
     document.querySelectorAll('.page-container').forEach(page => {
@@ -413,6 +424,11 @@ function showPage(pageName) {
     }
 }
 
+/**
+ * Updates the visual status of a workflow step.
+ * @param {string} step - Step name ('download', 'classes', 'annotate', 'train').
+ * @param {boolean} isReady - Whether the step is ready to proceed.
+ */
 function updateStepStatus(step, isReady) {
     workflowStatus[step] = isReady;
     
@@ -432,6 +448,10 @@ function updateStepStatus(step, isReady) {
     }
 }
 
+/**
+ * Checks the readiness status of all workflow steps.
+ * Updates UI indicators based on current state (images loaded, classes defined, annotations saved).
+ */
 async function checkWorkflowStatus() {
     const hasImages = images.length > 0;
     updateStepStatus('download', hasImages);
@@ -460,8 +480,11 @@ async function checkWorkflowStatus() {
     updateStepStatus('train', canTrain);
 }
 
+/**
+ * Renders the class list on the classes page and updates the annotation class selector.
+ * Highlights the currently selected class.
+ */
 function renderClasses() {
-    // Classes page
     const classesList = document.getElementById('classesList');
     if (classesList) {
         classesList.innerHTML = '';
@@ -514,7 +537,9 @@ function renderClasses() {
     }
 }
 
-// Helper to save classes
+/**
+ * Saves the current class list and selected class to localStorage.
+ */
 function saveClasses() {
     localStorage.setItem('yolo_classes', JSON.stringify(classes));
     if (selectedClass) {
@@ -535,6 +560,10 @@ window.removeClass = function(cls) {
     }
 };
 
+/**
+ * Adds a new class to the class list.
+ * Reads the class name from the input field and validates it.
+ */
 function addClass() {
     const newClassInput = document.getElementById('new-class-input');
     if (!newClassInput) return;
@@ -566,6 +595,10 @@ function addClass() {
     }
 }
 
+/**
+ * Gets the currently selected class name.
+ * @returns {string|null} Selected class name, or null if none selected.
+ */
 function getSelectedClass() {
     if (selectedClass) return selectedClass;
     
@@ -575,6 +608,11 @@ function getSelectedClass() {
 
 let downloadInProgress = false;
 
+/**
+ * Handles Reddit image download process.
+ * Supports both normal mode (10% test + 100% main) and three-step mode (150/350/500 distribution).
+ * @param {Event} e - Click event (optional).
+ */
 async function handleDownload(e) {
     if (e) e.preventDefault();
     console.log('handleDownload called');
@@ -825,6 +863,10 @@ async function handleDownload(e) {
     }
 }
 
+/**
+ * Pauses the current Reddit download process.
+ * @param {Event} e - Click event.
+ */
 async function handlePauseDownload(e) {
     if (e) e.preventDefault();
     const pauseBtn = document.getElementById('btn-pause-download');
@@ -842,6 +884,10 @@ async function handlePauseDownload(e) {
     }
 }
 
+/**
+ * Resumes a paused Reddit download process.
+ * @param {Event} e - Click event.
+ */
 async function handleResumeDownload(e) {
     if (e) e.preventDefault();
     const pauseBtn = document.getElementById('btn-pause-download');
@@ -859,6 +905,10 @@ async function handleResumeDownload(e) {
     }
 }
 
+/**
+ * Stops the current Reddit download process.
+ * @param {Event} e - Click event.
+ */
 async function handleStopDownload(e) {
     if (e) e.preventDefault();
     const downloadBtn = document.getElementById('btn-start-download');
@@ -886,6 +936,9 @@ window.handlePauseDownload = handlePauseDownload;
 window.handleResumeDownload = handleResumeDownload;
 window.handleStopDownload = handleStopDownload;
 
+/**
+ * Opens the models history folder in the system file manager.
+ */
 async function openModelsFolder() {
     try {
         const result = await ipcRenderer.invoke('open-models-folder');
@@ -901,6 +954,12 @@ async function openModelsFolder() {
 
 window.openModelsFolder = openModelsFolder;
 
+/**
+ * Translates a message key to the current language.
+ * @param {string} key - Translation key (e.g., 'msg-download-complete').
+ * @param {...string} args - Arguments to replace placeholders {0}, {1}, etc.
+ * @returns {string} Translated message with replaced placeholders.
+ */
 function translateMessage(key, ...args) {
     const currentLang = localStorage.getItem('yolo_language') || 'en';
     
@@ -922,6 +981,12 @@ function translateMessage(key, ...args) {
 let activeToasts = [];
 const MAX_TOASTS = 3;
 
+/**
+ * Shows a toast notification message.
+ * Limits the number of simultaneous toasts to MAX_TOASTS (3).
+ * @param {string} message - Message text or translation key (starts with 'msg-').
+ * @param {string} [type='info'] - Toast type ('info', 'success', 'warning', 'danger').
+ */
 function showMessage(message, type = 'info') {
     let displayMessage = message;
     if (message.startsWith('msg-')) {
@@ -1000,6 +1065,10 @@ function createToastContainer() {
     return container;
 }
 
+/**
+ * Opens a dialog to select and load a dataset folder.
+ * Loads images from the selected folder and updates the annotation interface.
+ */
 async function handleLoadDataset() {
     const selectedPath = await ipcRenderer.invoke('select-dataset-folder');
     if (selectedPath) {
@@ -1007,6 +1076,11 @@ async function handleLoadDataset() {
     }
 }
 
+/**
+ * Loads images from a dataset folder.
+ * @param {string} datasetPath - Path to the dataset folder.
+ * @param {boolean} [showNotification=true] - Whether to show a success notification.
+ */
 async function loadDataset(datasetPath, showNotification = true) {
     currentDatasetPath = datasetPath;
     const datasetPathDisplay = document.getElementById('datasetPath');
@@ -1039,6 +1113,11 @@ async function loadDataset(datasetPath, showNotification = true) {
 
 window.navigateImage = navigateImage; // Make global
 
+/**
+ * Loads an image from the current dataset at the specified index.
+ * Scales the image to fit the canvas and loads existing annotations.
+ * @param {number} index - Index of the image to load (0-based).
+ */
 async function loadImage(index) {
     if (index < 0 || index >= images.length) return;
     
@@ -1118,6 +1197,10 @@ async function loadImage(index) {
     };
 }
 
+/**
+ * Updates the visibility and state of navigation buttons (prev/next).
+ * Disables buttons at the start/end of the image list.
+ */
 function updateNavigationButtons() {
     const isFirst = currentImageIndex === 0;
     const isLast = currentImageIndex === images.length - 1;
@@ -1155,6 +1238,10 @@ function updateNavigationButtons() {
     }
 }
 
+/**
+ * Updates the annotation progress indicator.
+ * Shows the number of annotated images vs total images.
+ */
 function updateProgress() {
     const progressBar = document.getElementById('progressBar');
     if (progressBar && images.length > 0) {
@@ -1163,6 +1250,10 @@ function updateProgress() {
     }
 }
 
+/**
+ * Draws the current image on the canvas.
+ * Clears the canvas and redraws the image with all annotations.
+ */
 function drawImage() {
     if (!ctx || !currentImage) return;
     
@@ -1172,6 +1263,11 @@ function drawImage() {
     drawAnnotations();
 }
 
+/**
+ * Loads existing annotations from the label file for the current image.
+ * Parses YOLO format labels and converts them to annotation objects.
+ * @returns {Promise<void>}
+ */
 async function loadAnnotations() {
     currentAnnotations = [];
     
@@ -1244,6 +1340,10 @@ function updateAnnotationCount() {
     }
 }
 
+/**
+ * Draws all current annotations (bounding boxes) on the canvas.
+ * Uses different colors for different classes.
+ */
 function drawAnnotations() {
     if (!ctx) return;
     
@@ -1277,6 +1377,10 @@ function drawAnnotations() {
     }
 }
 
+/**
+ * Starts drawing a new bounding box annotation.
+ * @param {MouseEvent} e - Mouse event from canvas.
+ */
 function startDrawing(e) {
     if (!canvas) return;
     isDrawing = true;
@@ -1285,6 +1389,10 @@ function startDrawing(e) {
     startY = e.clientY - rect.top;
 }
 
+/**
+ * Updates the current bounding box while drawing.
+ * @param {MouseEvent} e - Mouse event from canvas.
+ */
 function draw(e) {
     if (!isDrawing || !canvas) return;
     
@@ -1302,6 +1410,10 @@ function draw(e) {
     drawImage();
 }
 
+/**
+ * Completes drawing a bounding box and adds it to annotations.
+ * @param {MouseEvent} e - Mouse event from canvas.
+ */
 function stopDrawing(e) {
     if (!isDrawing) return;
     isDrawing = false;
@@ -1328,6 +1440,10 @@ function stopDrawing(e) {
     drawImage();
 }
 
+/**
+ * Clears all annotations for the current image.
+ * Removes all bounding boxes from the canvas.
+ */
 function clearAnnotations() {
     if (confirm('Clear all annotations for this image?')) {
         currentAnnotations = [];
@@ -1336,6 +1452,10 @@ function clearAnnotations() {
     }
 }
 
+/**
+ * Removes the last added annotation (undo).
+ * Updates the canvas to reflect the change.
+ */
 function undoAnnotation() {
     if (currentAnnotations.length > 0) {
         currentAnnotations.pop();
@@ -1344,6 +1464,12 @@ function undoAnnotation() {
     }
 }
 
+/**
+ * Saves current annotations to a YOLO format label file.
+ * Automatically advances to the next image after saving.
+ * In three-step system stage 3, auto-advances if auto-label is enabled.
+ * @returns {Promise<void>}
+ */
 async function saveAnnotation() {
     if (images.length === 0) {
         showMessage('msg-no-images-loaded', 'warning');
@@ -1400,6 +1526,10 @@ async function saveAnnotation() {
     }
 }
 
+/**
+ * Toggles the auto-label feature on/off.
+ * When enabled, automatically runs prediction on the current image.
+ */
 function toggleAutoLabel() {
     const btn = document.getElementById('btn-auto-label');
     if (!btn) return;
@@ -1420,6 +1550,12 @@ function toggleAutoLabel() {
     }
 }
 
+/**
+ * Runs automatic object detection and labeling on the current image.
+ * Uses the trained model to predict bounding boxes and adds them as annotations.
+ * @param {boolean} [autoTriggered=false] - Whether this was triggered automatically (suppresses error messages).
+ * @returns {Promise<void>}
+ */
 async function handleAutoLabel(autoTriggered = false) {
     if (images.length === 0 || !currentImage) {
         if (!autoTriggered) {
@@ -1531,6 +1667,10 @@ async function handleAutoLabel(autoTriggered = false) {
     }
 }
 
+/**
+ * Navigates to the previous or next image in the dataset.
+ * @param {number} direction - Navigation direction (-1 for previous, 1 for next).
+ */
 function navigateImage(direction) {
     // Clear current annotations before navigating to prevent them from being carried over
     currentAnnotations = [];
@@ -1541,6 +1681,12 @@ function navigateImage(direction) {
     }
 }
 
+/**
+ * Starts YOLOv8 model training with the specified parameters.
+ * Handles both normal mode and three-step system mode.
+ * Automatically determines class name and learning percentage for model naming.
+ * @returns {Promise<void>}
+ */
 async function startTraining() {
     const trainDatasetPath = document.getElementById('train-dataset-path');
     const trainBtn = document.getElementById('btn-start-training');
@@ -1705,6 +1851,10 @@ async function startTraining() {
     }
 }
 
+/**
+ * Updates statistics display on the home page.
+ * Loads data from localStorage and displays dataset, image, and model counts.
+ */
 function updateStats() {
     const statDatasets = document.getElementById('stat-datasets');
     const statImages = document.getElementById('stat-images');
@@ -1719,6 +1869,9 @@ function updateStats() {
     if (statModels) statModels.textContent = models;
 }
 
+/**
+ * Increments the datasets counter in statistics.
+ */
 function incrementDatasets() {
     const current = parseInt(localStorage.getItem('yolo_stat_datasets') || '0');
     const newValue = current + 1;
@@ -1726,6 +1879,10 @@ function incrementDatasets() {
     updateStats();
 }
 
+/**
+ * Increments the images counter in statistics.
+ * @param {number} count - Number of images to add.
+ */
 function incrementImages(count) {
     const current = parseInt(localStorage.getItem('yolo_stat_images') || '0');
     const newValue = current + count;
@@ -1733,6 +1890,9 @@ function incrementImages(count) {
     updateStats();
 }
 
+/**
+ * Increments the models counter in statistics.
+ */
 function incrementModels() {
     const current = parseInt(localStorage.getItem('yolo_stat_models') || '0');
     const newValue = current + 1;
@@ -1759,6 +1919,10 @@ window.useBaseModel = async function() {
 };
 
 // Test Model Functions - New Interface
+/**
+ * Opens a dialog to select a test dataset folder.
+ * Loads images from the selected folder for model testing.
+ */
 async function handleLoadTestFolder() {
     const selectedPath = await ipcRenderer.invoke('select-dataset-folder');
     if (selectedPath) {
@@ -1766,6 +1930,10 @@ async function handleLoadTestFolder() {
     }
 }
 
+/**
+ * Loads images from a test dataset folder.
+ * @param {string} datasetPath - Path to the test dataset folder.
+ */
 async function loadTestDataset(datasetPath) {
     testDatasetPath = datasetPath;
     
@@ -1788,6 +1956,11 @@ async function loadTestDataset(datasetPath) {
     updateTestNavigationButtons();
 }
 
+/**
+ * Loads a test image at the specified index.
+ * Scales the image to fit the canvas.
+ * @param {number} index - Index of the image to load (0-based).
+ */
 async function loadTestImage(index) {
     if (index < 0 || index >= testImages.length) return;
     
@@ -1862,6 +2035,9 @@ async function loadTestImage(index) {
     };
 }
 
+/**
+ * Updates the visibility of test page navigation buttons.
+ */
 function updateTestNavigationButtons() {
     const prevBtn = document.getElementById('btn-test-prev');
     const nextBtn = document.getElementById('btn-test-next');
@@ -1874,6 +2050,10 @@ function updateTestNavigationButtons() {
     }
 }
 
+/**
+ * Navigates to the previous or next test image.
+ * @param {number} direction - Navigation direction (-1 for previous, 1 for next).
+ */
 window.navigateTestImage = async function(direction) {
     const newIndex = testCurrentImageIndex + direction;
     if (newIndex >= 0 && newIndex < testImages.length) {
@@ -1881,6 +2061,12 @@ window.navigateTestImage = async function(direction) {
     }
 };
 
+/**
+ * Runs object detection on a test image and displays results.
+ * Shows bounding boxes, confidence scores, and detection count.
+ * @param {string} imagePath - Path to the image file.
+ * @returns {Promise<void>}
+ */
 async function runTestPrediction(imagePath) {
     const modelPath = document.getElementById('test-model-path')?.value;
     if (!modelPath) {
@@ -2058,6 +2244,11 @@ function setupAdminModeToggle() {
     });
 }
 
+/**
+ * Toggles admin mode on/off.
+ * Admin mode enables advanced features like higher download limits.
+ * @param {boolean} enabled - Whether to enable admin mode.
+ */
 function toggleAdminMode(enabled) {
     adminModeEnabled = enabled;
     localStorage.setItem('yolo_admin_mode_enabled', enabled ? 'true' : 'false');
@@ -2090,6 +2281,11 @@ function loadAdminModeState() {
 }
 
 // Three-Step System Functions
+
+/**
+ * Toggles the three-step system on/off.
+ * @param {boolean} enabled - Whether to enable the three-step system.
+ */
 function toggleThreeStepSystem(enabled) {
     threeStepSystemEnabled = enabled;
     localStorage.setItem('yolo_three_step_enabled', enabled ? 'true' : 'false');
@@ -2136,6 +2332,10 @@ function updateThreeStepSystemUI() {
     }
 }
 
+/**
+ * Gets the current three-step system stage.
+ * @returns {number} Current stage (1, 1.5, 2, 2.5, or 3).
+ */
 function getThreeStepStage() {
     const stageStr = localStorage.getItem('yolo_three_step_stage') || '1';
     // Use parseFloat to handle decimal stages (1.5, 2.5, 3.5)
@@ -2143,6 +2343,10 @@ function getThreeStepStage() {
     return isNaN(stage) ? 1 : stage;
 }
 
+/**
+ * Sets the three-step system stage.
+ * @param {number} stage - Stage number (1, 1.5, 2, 2.5, or 3).
+ */
 function setThreeStepStage(stage) {
     threeStepStage = stage;
     localStorage.setItem('yolo_three_step_stage', stage.toString());
@@ -2153,6 +2357,10 @@ function getThreeStepClassName() {
     return localStorage.getItem('yolo_three_step_class_name') || '';
 }
 
+/**
+ * Sets the class name for the three-step system.
+ * @param {string} className - Class name.
+ */
 function setThreeStepClassName(className) {
     threeStepClassName = className;
     localStorage.setItem('yolo_three_step_class_name', className);
@@ -2162,6 +2370,10 @@ function getThreeStepBasePath() {
     return localStorage.getItem('yolo_three_step_base_path') || '';
 }
 
+/**
+ * Sets the base path for the three-step system dataset.
+ * @param {string} basePath - Base path to the class folder.
+ */
 function setThreeStepBasePath(basePath) {
     threeStepBasePath = basePath;
     localStorage.setItem('yolo_three_step_base_path', basePath);
@@ -2218,6 +2430,10 @@ async function loadThreeStepSystemState() {
     }
 }
 
+/**
+ * Sets up the annotation page for three-step system.
+ * Loads the appropriate folder based on current stage (15, 35, or 50).
+ */
 async function setupThreeStepAnnotation() {
     if (!threeStepSystemEnabled) {
         console.log('Three-step system not enabled');
@@ -2307,6 +2523,10 @@ async function setupThreeStepAnnotation() {
     }
 }
 
+/**
+ * Checks if all images in the current three-step stage are annotated.
+ * @returns {Promise<boolean>} True if all images are annotated, false otherwise.
+ */
 async function checkThreeStepAnnotationComplete() {
     if (!threeStepSystemEnabled || !threeStepBasePath) return false;
     
@@ -2320,6 +2540,10 @@ async function checkThreeStepAnnotationComplete() {
     return true;
 }
 
+/**
+ * Advances to the next three-step system stage.
+ * Handles transitions: Stage 1 → Training 1.5 → Stage 2 → Training 2.5 → Stage 3 → Finalize.
+ */
 async function proceedToNextThreeStepStage() {
     if (!threeStepSystemEnabled) return;
     
@@ -2367,6 +2591,10 @@ async function proceedToNextThreeStepStage() {
     }
 }
 
+/**
+ * Sets up the training page for three-step system.
+ * Locks dataset path and training parameters based on current stage.
+ */
 async function setupThreeStepTraining() {
     if (!threeStepSystemEnabled) {
         // If 3-step system is disabled, unlock all fields
@@ -2478,6 +2706,10 @@ async function setupThreeStepTraining() {
     }
 }
 
+/**
+ * Handles the "Finish Annotation" button click in three-step system.
+ * Checks if annotation is complete and proceeds to the next stage.
+ */
 function handleFinishAnnotate() {
     if (threeStepSystemEnabled) {
         // Check if all images are annotated
@@ -2488,6 +2720,11 @@ function handleFinishAnnotate() {
     }
 }
 
+/**
+ * Finalizes the three-step system by merging all annotations.
+ * Combines images and labels from stages 15, 35, and 50 into a single dataset.
+ * Then trains the final model on the complete dataset.
+ */
 async function finalizeThreeStepSystem() {
     // Collect all annotations from 3 folders into CLASSNAME_100
     const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
