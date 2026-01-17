@@ -61,9 +61,9 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
       
       const files = await fs.readdir(sourceDir);
       const imageFiles = files.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
-      
-      const count15 = 150;
-      const count35 = 350;
+      const n = typeof totalCount === 'number' && totalCount > 0 ? totalCount : imageFiles.length;
+      const count15 = Math.floor(n * 0.15);
+      const count35 = Math.floor(n * 0.35);
       
       for (let i = 0; i < count15 && i < imageFiles.length; i++) {
         const src = path.join(sourceDir, imageFiles[i]);
@@ -86,9 +86,9 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
       const actualCount15 = Math.min(count15, imageFiles.length);
       const actualCount35 = Math.min(count35, Math.max(0, imageFiles.length - count15));
       const actualCount50 = Math.max(0, imageFiles.length - count15 - count35);
-      
-      await fs.remove(sourceDir);
-      
+      for (const f of imageFiles) {
+        await fs.remove(path.join(sourceDir, f));
+      }
       return {
         success: true,
         basePath: classFolder,

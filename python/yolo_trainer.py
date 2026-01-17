@@ -57,14 +57,20 @@ def split_dataset(raw_path, dataset_path, train_ratio=0.8):
     if not images:
         print(f"Error: No images found in {raw_path}")
         return
-        
+
     random.shuffle(images)
-    
-    split_idx = int(len(images) * train_ratio)
-    train_images = images[:split_idx]
-    val_images = images[split_idx:]
-    
-    print(f"Splitting dataset: {len(train_images)} training, {len(val_images)} validation", flush=True)
+
+    if len(images) == 1:
+        train_images = images[:]
+        val_images = images[:]
+        print(f"Splitting dataset: 1 image -> use in both train and val (required by YOLO)", flush=True)
+    else:
+        split_idx = max(1, int(len(images) * train_ratio))
+        if split_idx >= len(images):
+            split_idx = len(images) - 1
+        train_images = images[:split_idx]
+        val_images = images[split_idx:]
+        print(f"Splitting dataset: {len(train_images)} training, {len(val_images)} validation", flush=True)
     
     # Function to copy pair
     def copy_pair(img_path, split_name):

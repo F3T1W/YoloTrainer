@@ -7,10 +7,11 @@ import time
 
 def download_reddit_images(subreddit, limit, class_name, output_dir, three_step_mode=False):
     """
-    Download images from Reddit subreddit
-    Also downloads additional 10% for testing into FOR_TESTS folder
-    If three_step_mode is True, uses distribution: 10% test, 150, 350, rest (ideally 500)
-    If three_step_mode is False, downloads all images to main folder (10% test, rest main)
+    Download images from Reddit subreddit.
+    Also downloads 10% for testing into FOR_TESTS folder.
+    If three_step_mode: 10% test, then 15%/35%/50% of limit to folders _15, _35, _50
+      (e.g. limit=1000 -> 150/350/500; limit=10 in admin mode -> 1/3/6).
+    If three_step_mode is False: 10% test, 100% main.
     """
     output_path = Path(output_dir) / class_name
     output_path.mkdir(parents=True, exist_ok=True)
@@ -23,11 +24,10 @@ def download_reddit_images(subreddit, limit, class_name, output_dir, three_step_
     test_limit = int(limit * 0.1)
     
     if three_step_mode:
-        # Fixed distribution: 10% for tests, then 150, 350, rest (ideally 500) for training
-        count_15 = 150
-        count_35 = 350
-        count_50_ideal = 500
-        # Total needed: test + 150 + 350 + 500 = 1000 (or less if limit is smaller)
+        # Distribution 15% / 35% / 50% of limit (for limit=1000: 150/350/500; for limit=100: 15/35/50)
+        count_15 = int(limit * 0.15)
+        count_35 = int(limit * 0.35)
+        count_50_ideal = limit - count_15 - count_35  # remainder so total = limit
         total_needed = test_limit + count_15 + count_35 + count_50_ideal
     else:
         # Normal mode: 10% test, 100% main (total 110% of limit)

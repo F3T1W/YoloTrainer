@@ -10,11 +10,10 @@ let adminModeEnabled = false;
 let logoClickTimes = [];
 const LOGO_CLICK_TIMEOUT = 1000; // 1 second window for 3 clicks
 
-// Make functions available globally for onclick handlers
+// Make functions available globally for onclick handlers (addClass/removeClass задаются в init после Classes.init)
 window.showPage = showPage;
 window.handleDownload = handleDownload;
 window.handleSelectDownloadPath = handleSelectDownloadPath;
-window.addClass = addClass;
 window.handleLoadDataset = handleLoadDataset;
 window.saveAnnotation = saveAnnotation;
 window.clearAnnotations = clearAnnotations;
@@ -111,24 +110,9 @@ function init() {
     
     setupAdminModeToggle();
     
-    const savedClasses = localStorage.getItem('yolo_classes');
-    if (savedClasses) {
-        try {
-            classes = JSON.parse(savedClasses);
-        } catch (e) {
-            console.error('Failed to parse saved classes', e);
-            classes = [];
-        }
-    } else {
-        classes = [];
-    }
-    
-    const savedSelectedClass = localStorage.getItem('yolo_selected_class');
-    if (savedSelectedClass && classes.includes(savedSelectedClass)) {
-        selectedClass = savedSelectedClass;
-    } else {
-        selectedClass = classes[0] || null;
-    }
+    Classes.init({ showMessage, checkWorkflowStatus });
+    window.addClass = function() { Classes.addClass(); };
+    window.removeClass = Classes.removeClass;
     
     document.querySelectorAll('.menu-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -323,7 +307,7 @@ function init() {
     });
     
     // Initial render
-    renderClasses();
+    Classes.renderClasses();
     updateStats();
     checkWorkflowStatus();
 }
@@ -359,12 +343,10 @@ let testCurrentImage = null;
 let testCanvas = null;
 let testCtx = null;
 let currentImageIndex = 0;
-let classes = [];
 let currentAnnotations = [];
 let isDrawing = false;
 let startX = 0, startY = 0;
 let currentBox = null;
-let selectedClass = null;
 
 // Canvas setup
 const canvas = document.getElementById('annotation-canvas');
@@ -456,7 +438,7 @@ async function checkWorkflowStatus() {
     const hasImages = images.length > 0;
     updateStepStatus('download', hasImages);
     
-    const hasClasses = classes.length > 0;
+    const hasClasses = Classes.getClasses().length > 0;
     updateStepStatus('classes', hasClasses);
     
     const hasDataset = currentDatasetPath !== null && images.length > 0;
@@ -478,132 +460,6 @@ async function checkWorkflowStatus() {
     
     const canTrain = hasDataset && hasClasses && hasAnnotations;
     updateStepStatus('train', canTrain);
-}
-
-/**
- * Renders the class list on the classes page and updates the annotation class selector.
- * Highlights the currently selected class.
- */
-function renderClasses() {
-    const classesList = document.getElementById('classesList');
-    if (classesList) {
-        classesList.innerHTML = '';
-        if (classes.length === 0) {
-            classesList.innerHTML = '<p class="text-muted text-center text-white-50">No classes yet. Add your first class above.</p>';
-        } else {
-            classes.forEach((cls, idx) => {
-                const badge = document.createElement('span');
-                // Use Bootstrap badge classes for better look
-                badge.className = 'badge rounded-pill text-bg-dark border border-secondary m-1 p-2 fs-6 cursor-pointer user-select-none d-inline-flex align-items-center gap-2';
-                
-                if (cls === selectedClass) {
-                    badge.classList.remove('text-bg-dark', 'border-secondary');
-                    badge.classList.add('text-bg-danger', 'border-danger');
-                }
-                
-                badge.innerHTML = `
-                    <span>${cls}</span>
-                    <i class="bi bi-x-circle-fill text-white-50 hover-text-white" onclick="event.stopPropagation(); removeClass('${cls}')" title="Remove class" style="cursor: pointer;"></i>
-                `;
-                
-                badge.onclick = () => {
-                    selectedClass = cls;
-                    saveClasses(); // Save selected class
-                    renderClasses(); // Re-render to update active state
-                };
-                
-                classesList.appendChild(badge);
-            });
-        }
-    }
-    
-    // Annotate page class selector
-    const classSelector = document.getElementById('annotation-class-select');
-    if (classSelector) {
-        classSelector.innerHTML = '<option disabled>Select Class...</option>';
-        classes.forEach((cls) => {
-            const option = document.createElement('option');
-            option.value = cls;
-            option.textContent = cls;
-            if (cls === selectedClass) option.selected = true;
-            classSelector.appendChild(option);
-        });
-        
-        // Add event listener if not already added (or just update on change)
-        classSelector.onchange = (e) => {
-            selectedClass = e.target.value;
-            saveClasses(); // Save selected class
-        };
-    }
-}
-
-/**
- * Saves the current class list and selected class to localStorage.
- */
-function saveClasses() {
-    localStorage.setItem('yolo_classes', JSON.stringify(classes));
-    if (selectedClass) {
-        localStorage.setItem('yolo_selected_class', selectedClass);
-    }
-}
-
-// Make removeClass global so it can be called from onclick
-window.removeClass = function(cls) {
-    if (confirm(`Delete class "${cls}"?`)) {
-        classes = classes.filter(c => c !== cls);
-        saveClasses(); // Save to storage
-        if (selectedClass === cls) {
-            selectedClass = classes[0] || null;
-        }
-        renderClasses();
-        checkWorkflowStatus();
-    }
-};
-
-/**
- * Adds a new class to the class list.
- * Reads the class name from the input field and validates it.
- */
-function addClass() {
-    const newClassInput = document.getElementById('new-class-input');
-    if (!newClassInput) return;
-    
-    const newClass = newClassInput.value.trim();
-    if (newClass && !classes.includes(newClass)) {
-        classes.push(newClass);
-        selectedClass = newClass; // Automatically select the newly added class
-        saveClasses(); // Save to storage
-        renderClasses();
-        newClassInput.value = '';
-        checkWorkflowStatus();
-        
-        // Show success message
-        const classesList = document.getElementById('classesList');
-        if (classesList) {
-            const alert = document.createElement('div');
-            alert.className = 'alert alert-success alert-dismissible fade show mt-2';
-            alert.innerHTML = `
-                <i class="bi bi-check-circle me-2"></i>Class "${newClass}" added successfully!
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            // Insert alert after the card body, or append to a specific container
-            // For now, let's use showMessage toast which is more consistent
-            showMessage(`msg-class-added:${newClass}`, 'success');
-        }
-    } else if (classes.includes(newClass)) {
-        showMessage(`msg-class-exists:${newClass}`, 'warning');
-    }
-}
-
-/**
- * Gets the currently selected class name.
- * @returns {string|null} Selected class name, or null if none selected.
- */
-function getSelectedClass() {
-    if (selectedClass) return selectedClass;
-    
-    const selected = document.querySelector('input[name="classRadio"]:checked');
-    return selected ? selected.value : (classes[0] || 'Default');
 }
 
 let downloadInProgress = false;
@@ -644,9 +500,9 @@ async function handleDownload(e) {
     let limit = parseInt(limitInput.value) || 100;
     let outputDir = outputDirInput ? outputDirInput.value.trim() : '';
     
-    // Three-step system: force limit to 1000 (or 100 if admin mode)
+    // Three-step system: limit 1000 (or 10 if admin mode)
     if (threeStepSystemEnabled) {
-        limit = adminModeEnabled ? 100 : 1000;
+        limit = adminModeEnabled ? 10 : 1000;
         if (!className) {
             showMessage('msg-enter-class-name', 'warning');
             return;
@@ -758,10 +614,13 @@ async function handleDownload(e) {
                         console.log('Temp FOR_TESTS folder cleaned up');
                     } catch (error) {
                         console.error('Error cleaning up temp FOR_TESTS folder:', error);
-                        // Don't fail if cleanup fails
                     }
                 }
-                
+                try {
+                    await ipcRenderer.invoke('remove-folder', sourcePath);
+                } catch (e) {
+                    console.error('Error cleaning temp class folder:', e);
+                }
                 if (distributionResult && distributionResult.basePath) {
                     const classFolderExists = await ipcRenderer.invoke('file-exists', distributionResult.basePath);
                     console.log('Class folder exists:', classFolderExists, 'at:', distributionResult.basePath);
@@ -793,12 +652,7 @@ async function handleDownload(e) {
                 
                 setThreeStepStage(1);
                 
-                if (!classes.includes(className)) {
-                    classes.push(className);
-                    selectedClass = className;
-                    saveClasses();
-                    renderClasses();
-                }
+                Classes.addClassByName(className);
                 
                 incrementDatasets();
                 incrementImages(downloadedCount);
@@ -1319,7 +1173,7 @@ async function loadAnnotations() {
                             centerY: centerY,
                             width: width,
                             height: height,
-                            className: classes[classId] || `Class_${classId}`
+                            className: (Classes.getClasses()[classId] || `Class_${classId}`)
                         });
                     }
                 });
@@ -1429,7 +1283,7 @@ function stopDrawing(e) {
             centerY: (currentBox.y + currentBox.h / 2) / canvas.height,
             width: currentBox.w / canvas.width,
             height: currentBox.h / canvas.height,
-            className: getSelectedClass()
+            className: Classes.getSelectedClass()
         };
         
         currentAnnotations.push(ann);
@@ -1500,7 +1354,7 @@ async function saveAnnotation() {
         await ipcRenderer.invoke('save-annotation', {
             imagePath: targetPath,
             annotations: currentAnnotations,
-            classNames: classes
+            classNames: Classes.getClasses()
         });
         
         showMessage('msg-annotation-saved', 'success');
@@ -1611,7 +1465,7 @@ async function handleAutoLabel(autoTriggered = false) {
 
         if (result.success && result.detections) {
             const newAnnotations = result.detections.map(d => {
-                if (!classes.includes(d.class_name)) {
+                if (!Classes.getClasses().includes(d.class_name)) {
                 }
 
                 return {
@@ -1729,7 +1583,7 @@ async function startTraining() {
             modelLearningPercent = stageNum === 1 ? 15 : 35;
             console.log('Training path for stage', stage, ':', stagePath, '(folder:', folderName, ')');
             epochs = parseInt(document.getElementById('epochs')?.value || 50);
-            if (epochs < 50) epochs = 50;
+            if (epochs < 1) epochs = 1;
             if (epochs > 100) epochs = 100;
         }
         batchSize = 16;
@@ -1770,7 +1624,7 @@ async function startTraining() {
     }
     
     if (!modelClassName) {
-        modelClassName = selectedClass || (classes.length > 0 ? classes[0] : null);
+        modelClassName = Classes.getSelectedClass() || (Classes.getClasses().length > 0 ? Classes.getClasses()[0] : null);
     }
     
     try {
@@ -1779,7 +1633,7 @@ async function startTraining() {
             epochs,
             batchSize,
             imgSize,
-            classNames: classes,
+            classNames: Classes.getClasses(),
             className: modelClassName,
             learningPercent: modelLearningPercent
         });
@@ -2299,8 +2153,8 @@ function updateThreeStepSystemUI() {
     const limitInput = document.getElementById('image-limit');
     if (limitInput) {
         if (threeStepSystemEnabled) {
-            // Use 100 if admin mode is enabled, otherwise 1000
-            limitInput.value = adminModeEnabled ? 100 : 1000;
+            // 10 if admin mode, otherwise 1000
+            limitInput.value = adminModeEnabled ? 10 : 1000;
             limitInput.disabled = true;
             limitInput.style.opacity = '0.6';
         } else {
@@ -2493,10 +2347,9 @@ async function setupThreeStepAnnotation() {
     if (classSelect) {
         classSelect.disabled = true;
         classSelect.style.opacity = '0.6';
-        // Set class
-        if (classes.includes(threeStepClassName)) {
-            classSelect.value = threeStepClassName;
-            selectedClass = threeStepClassName;
+        if (Classes.getClasses().includes(threeStepClassName)) {
+            Classes.setSelectedClass(threeStepClassName);
+            Classes.renderClasses();
         }
     }
     
@@ -2691,7 +2544,6 @@ async function setupThreeStepTraining() {
         imgSizeInput.style.opacity = '0.6';
     }
     
-    // Limit epochs to 50-100
     const epochsInput = document.getElementById('epochs');
     if (epochsInput) {
         if (isFinalTraining) {
@@ -2699,8 +2551,7 @@ async function setupThreeStepTraining() {
             epochsInput.disabled = true;
             epochsInput.style.opacity = '0.6';
         } else {
-            epochsInput.value = '50';
-            epochsInput.min = '50';
+            epochsInput.min = '1';
             epochsInput.max = '100';
         }
     }
