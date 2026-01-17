@@ -1,4 +1,6 @@
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const path = require('path');
+const fs = require('fs');
 const { logger } = require('./utils/logger');
 
 // Import handler modules
@@ -71,6 +73,34 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Set Dock icon for macOS (works in development mode)
+  // Note: app.dock.setIcon() requires PNG format, not .icns
+  // Use icon-dock.png if available (with rounded corners), otherwise fallback to icon.png
+  if (process.platform === 'darwin') {
+    const dockIconPath = path.resolve(__dirname, '../../build/icon-dock.png');
+    const fallbackIconPath = path.resolve(__dirname, '../../build/icon.png');
+    
+    try {
+      let iconToUse = null;
+      if (fs.existsSync(dockIconPath)) {
+        iconToUse = dockIconPath;
+        logger.info('Using Dock-optimized icon:', iconToUse);
+      } else if (fs.existsSync(fallbackIconPath)) {
+        iconToUse = fallbackIconPath;
+        logger.info('Using standard icon:', iconToUse);
+      }
+      
+      if (iconToUse) {
+        app.dock.setIcon(iconToUse);
+        logger.info('Dock icon set successfully');
+      } else {
+        logger.warn('No icon file found');
+      }
+    } catch (error) {
+      logger.warn('Failed to set Dock icon:', error.message);
+    }
+  }
+  
   createWindow();
   
   // Register all IPC handlers

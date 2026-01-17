@@ -125,6 +125,4 @@ xattr -cr "/path/to/YOLO Trainer.app"
 
 # Method 3: Alternative method
 # Right-click on the application → "Open" (only needed once)
-```
-
-After this, the application should launch normally.
+```After this, the application should launch normally.

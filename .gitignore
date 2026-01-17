@@ -11,3 +11,7 @@ __pycache__/
 venv/
 dist/
 build/
+!build/icon.png
+!build/icon.ico
+!build/icon.icns
+!build/icon.svg
