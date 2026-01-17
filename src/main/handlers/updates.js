@@ -1,3 +1,5 @@
+const { logger } = require('../utils/logger');
+
 /**
  * Registers update-related IPC handlers.
  * @param {Electron.IpcMain} ipcMain - Electron IPC main instance.
@@ -10,9 +12,7 @@
 function registerUpdateHandlers(ipcMain, mainWindow, { updaterAvailable, autoUpdater, checkForUpdates }) {
   /**
    * Checks for application updates (currently disabled).
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether check was initiated.
-   * @returns {string} [returns.error] - Error message if check failed.
+   * @returns {Promise<Object>} Result object with success status and optional error message.
    */
   ipcMain.handle('check-for-updates', async () => {
     if (!updaterAvailable || !autoUpdater) {
@@ -22,16 +22,14 @@ function registerUpdateHandlers(ipcMain, mainWindow, { updaterAvailable, autoUpd
       checkForUpdates();
       return { success: true };
     } catch (error) {
-      console.error('Error checking for updates:', error);
+      logger.error('Error checking for updates', error);
       return { success: false, error: error.message };
     }
   });
 
   /**
    * Downloads an available update (currently disabled).
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether download was initiated.
-   * @returns {string} [returns.error] - Error message if download failed.
+   * @returns {Promise<Object>} Result object with success status and optional error message.
    */
   ipcMain.handle('download-update', async () => {
     if (!updaterAvailable || !autoUpdater) {
@@ -41,17 +39,14 @@ function registerUpdateHandlers(ipcMain, mainWindow, { updaterAvailable, autoUpd
       autoUpdater.downloadUpdate();
       return { success: true };
     } catch (error) {
-      console.error('Error downloading update:', error);
+      logger.error('Error downloading update', error);
       return { success: false, error: error.message };
     }
   });
 
   /**
    * Installs a downloaded update (currently disabled).
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether installation was initiated.
-   * @returns {string} [returns.error] - Error message if installation failed.
-   * @returns {boolean} [returns.manualInstall] - Whether manual installation is required (macOS unsigned apps).
+   * @returns {Promise<Object>} Result object with success status, optional error message, and manualInstall flag.
    */
   ipcMain.handle('install-update', async () => {
     if (!updaterAvailable || !autoUpdater) {
@@ -59,14 +54,14 @@ function registerUpdateHandlers(ipcMain, mainWindow, { updaterAvailable, autoUpd
     }
     try {
       if (process.platform === 'darwin') {
-        console.log('Attempting to install update on macOS (unsigned app)...');
+        logger.info('Attempting to install update on macOS (unsigned app)');
         autoUpdater.quitAndInstall(false, true);
       } else {
         autoUpdater.quitAndInstall(false, true);
       }
       return { success: true };
     } catch (error) {
-      console.error('Error installing update:', error);
+      logger.error('Error installing update', error);
       
       if (process.platform === 'darwin' && error.message && error.message.includes('signature')) {
         return { 

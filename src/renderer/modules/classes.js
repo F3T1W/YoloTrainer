@@ -1,6 +1,6 @@
 /**
- * Модуль управления классами аннотаций.
- * Хранит список классов, выбранный класс, синхронизирует с localStorage и DOM.
+ * Class management module.
+ * Manages annotation classes, selected class, syncs with localStorage and DOM.
  */
 (function (global) {
     'use strict';
@@ -11,10 +11,10 @@
     let checkWorkflowStatus = function () {};
 
     /**
-     * Инициализация: загрузка из localStorage и сохранение колбэков.
+     * Initializes the module: loads from localStorage and stores callbacks.
      * @param {Object} opts
-     * @param {Function} opts.showMessage - Функция показа уведомления.
-     * @param {Function} opts.checkWorkflowStatus - Функция проверки статуса воркфлоу.
+     * @param {Function} opts.showMessage - Function to show notifications.
+     * @param {Function} opts.checkWorkflowStatus - Function to check workflow status.
      */
     function init(opts) {
         if (opts && opts.showMessage) showMessage = opts.showMessage;
@@ -24,7 +24,11 @@
             const saved = localStorage.getItem('yolo_classes');
             classes = saved ? JSON.parse(saved) : [];
         } catch (e) {
-            console.error('Ошибка разбора сохранённых классов', e);
+            if (window.logger) {
+                window.logger.error('Failed to parse saved classes', e);
+            } else {
+                console.error('Failed to parse saved classes', e);
+            }
             classes = [];
         }
 
@@ -33,7 +37,7 @@
     }
 
     /**
-     * Возвращает копию списка классов.
+     * Returns a copy of the classes list.
      * @returns {string[]}
      */
     function getClasses() {
@@ -41,7 +45,7 @@
     }
 
     /**
-     * Возвращает выбранный класс или fallback.
+     * Returns the selected class or fallback.
      * @returns {string|null}
      */
     function getSelectedClass() {
@@ -51,7 +55,7 @@
     }
 
     /**
-     * Устанавливает выбранный класс.
+     * Sets the selected class.
      * @param {string|null} name
      */
     function setSelectedClass(name) {
@@ -59,7 +63,7 @@
     }
 
     /**
-     * Сохраняет классы и выбранный класс в localStorage.
+     * Saves classes and selected class to localStorage.
      */
     function saveClasses() {
         localStorage.setItem('yolo_classes', JSON.stringify(classes));
@@ -69,14 +73,14 @@
     }
 
     /**
-     * Отрисовывает список классов на странице Classes и селектор на странице Annotate.
+     * Renders the classes list on the Classes page and the selector on the Annotate page.
      */
     function renderClasses() {
         const classesList = document.getElementById('classesList');
         if (classesList) {
             classesList.innerHTML = '';
             if (classes.length === 0) {
-                classesList.innerHTML = '<p class="text-muted text-center text-white-50">No classes yet. Add your first class above.</p>';
+                classesList.innerHTML = '<p class="text-center text-white">No classes yet. Add your first class above.</p>';
             } else {
                 classes.forEach(function (cls) {
                     const badge = document.createElement('span');
@@ -86,7 +90,7 @@
                         badge.classList.add('text-bg-danger', 'border-danger');
                     }
                     var escaped = JSON.stringify(cls).replace(/"/g, '&quot;');
-                    badge.innerHTML = '<span>' + cls + '</span><i class="bi bi-x-circle-fill text-white-50 hover-text-white" onclick="event.stopPropagation(); window.removeClass(' + escaped + ')" title="Remove class" style="cursor: pointer;"></i>';
+                    badge.innerHTML = '<span>' + cls + '</span><i class="bi bi-x-circle-fill text-white hover-text-white" onclick="event.stopPropagation(); window.removeClass(' + escaped + ')" title="Remove class" style="cursor: pointer;"></i>';
                     badge.onclick = function () {
                         selectedClass = cls;
                         saveClasses();
@@ -115,7 +119,7 @@
     }
 
     /**
-     * Добавляет класс из поля #new-class-input.
+     * Adds a class from the #new-class-input field.
      */
     function addClass() {
         const input = document.getElementById('new-class-input');
@@ -139,7 +143,7 @@
     }
 
     /**
-     * Удаляет класс по имени.
+     * Removes a class by name.
      * @param {string} cls
      */
     function removeClass(cls) {
@@ -155,7 +159,7 @@
     }
 
     /**
-     * Добавляет класс по имени (без поля ввода). Используется при загрузке и three-step.
+     * Adds a class by name (without input field). Used during download and three-step system.
      * @param {string} name
      */
     function addClassByName(name) {

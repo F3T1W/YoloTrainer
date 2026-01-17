@@ -1,28 +1,16 @@
-// Three-Step System state
-let threeStepSystemEnabled = false;
-let threeStepStage = 1; // 1, 2, or 3
-let threeStepClassName = '';
-let threeStepBasePath = '';
-let threeStepModelPath = '';
+// Admin mode state - now managed by AppState
 
-// Admin mode state
-let adminModeEnabled = false;
-let logoClickTimes = [];
-const LOGO_CLICK_TIMEOUT = 1000; // 1 second window for 3 clicks
-
-// Make functions available globally for onclick handlers (addClass/removeClass задаются в init после Classes.init)
+// Make functions available globally for onclick handlers
 window.showPage = showPage;
-window.handleDownload = handleDownload;
-window.handleSelectDownloadPath = handleSelectDownloadPath;
 window.handleLoadDataset = handleLoadDataset;
 window.saveAnnotation = saveAnnotation;
-window.clearAnnotations = clearAnnotations;
-window.undoAnnotation = undoAnnotation;
+window.clearAnnotations = AnnotationCore.clearAnnotations;
+window.undoAnnotation = AnnotationCore.undoAnnotation;
 window.handleAutoLabel = handleAutoLabel;
 window.toggleAutoLabel = toggleAutoLabel;
-window.toggleThreeStepSystem = toggleThreeStepSystem;
+window.toggleThreeStepSystem = ThreeStep.toggleThreeStepSystem;
 window.toggleAdminMode = toggleAdminMode;
-window.handleFinishAnnotate = handleFinishAnnotate;
+window.handleFinishAnnotate = ThreeStep.handleFinishAnnotate;
 
 // Initialize
 if (document.readyState === 'loading') {
@@ -36,7 +24,13 @@ if (document.readyState === 'loading') {
  * Sets up keyboard shortcuts, event listeners, and loads initial state.
  */
 function init() {
-    console.log('Annotation script initialized');
+    if (window.logger) {
+        window.logger.info('Annotation script initialized');
+    } else {
+        if (window.logger) {
+            window.logger.info('Annotation script initialized');
+        }
+    }
     
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -54,9 +48,9 @@ function init() {
             navigateImage(-1);
         } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
             e.preventDefault();
-            undoAnnotation();
+            AnnotationCore.undoAnnotation();
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
-            undoAnnotation(); 
+            AnnotationCore.undoAnnotation(); 
             }
             return;
         }
@@ -80,6 +74,9 @@ function init() {
     if (testConfInput) {
         testConfInput.addEventListener('input', async () => {
             // If we have a loaded image and model, re-run prediction
+            const testCurrentImageIndex = AppState.getTestCurrentImageIndex();
+            const testImages = AppState.getTestImages();
+            const testDatasetPath = AppState.getTestDatasetPath();
             if (testCurrentImageIndex >= 0 && testImages.length > 0) {
                 const modelPath = document.getElementById('test-model-path')?.value;
                 if (modelPath) {
@@ -102,13 +99,19 @@ function init() {
     
     updateStats();
     
+    // Make resetStats function globally available
+    window.resetStats = function() {
+        if (confirm('Reset all statistics (datasets, images, models) to zero?')) {
+            localStorage.setItem('yolo_stat_datasets', '0');
+            localStorage.setItem('yolo_stat_images', '0');
+            localStorage.setItem('yolo_stat_models', '0');
+            updateStats();
+            if (showMessage) showMessage('msg-stats-reset', 'info');
+        }
+    };
+    
     // Load admin mode state first (before three-step system, so it can affect its UI)
     loadAdminModeState();
-    
-    // Load three-step system state (this will also update UI with admin mode settings)
-    loadThreeStepSystemState();
-    
-    setupAdminModeToggle();
     
     Classes.init({ showMessage, checkWorkflowStatus });
     window.addClass = function() { Classes.addClass(); };
@@ -122,32 +125,61 @@ function init() {
         });
     });
     
-    ipcRenderer.on('training-progress', (event, data) => {
-        const trainingOutput = document.getElementById('training-log');
-        const trainingStatus = document.getElementById('training-status-badge');
-        
-        if (trainingOutput) {
-            // Append line
-            const div = document.createElement('div');
-            div.textContent = data;
-            // Colorize specific logs
-            if (data.includes('Epoch')) div.style.color = '#0dcaf0'; // Cyan
-            if (data.includes('Class')) div.style.color = '#ffc107'; // Yellow
-            if (data.includes('Training complete')) div.style.color = '#198754'; // Green
-            
-            trainingOutput.appendChild(div);
-            trainingOutput.scrollTop = trainingOutput.scrollHeight;
+    ThreeStep.init({
+        ipcRenderer: ipcRenderer,
+        showMessage: showMessage,
+        showPage: showPage,
+        loadDataset: loadDataset,
+        getClasses: () => Classes.getClasses(),
+        setSelectedClass: (c) => Classes.setSelectedClass(c),
+        renderClasses: () => Classes.renderClasses(),
+        startTraining: Training.startTraining,
+        getAdminModeEnabled: () => AppState.getAdminModeEnabled()
+    });
+    
+    // Load three-step system state AFTER init (so getAdminModeEnabled is available)
+    ThreeStep.loadThreeStepSystemState();
+    
+    setupAdminModeToggle();
+
+    Training.init({
+        ipcRenderer: ipcRenderer,
+        getThreeStepStage: () => ThreeStep.getThreeStepStage(),
+        getThreeStepBasePath: () => ThreeStep.getThreeStepBasePath(),
+        getThreeStepClassName: () => ThreeStep.getThreeStepClassName(),
+        getThreeStepSystemEnabled: () => ThreeStep.getThreeStepSystemEnabled(),
+        getClasses: () => Classes.getClasses(),
+        getSelectedClass: () => Classes.getSelectedClass(),
+        getCurrentDatasetPath: () => AppState.getCurrentDatasetPath(),
+        showMessage: showMessage,
+        incrementModels: incrementModels,
+        proceedToNextThreeStepStage: () => ThreeStep.proceedToNextThreeStepStage(),
+        setThreeStepModelPath: (p) => ThreeStep.setThreeStepModelPath(p),
+        onThreeStepComplete: () => {
+            ThreeStep.toggleThreeStepSystem(false);
+            localStorage.removeItem('yolo_three_step_enabled');
+            localStorage.removeItem('yolo_three_step_stage');
+            localStorage.removeItem('yolo_three_step_class_name');
+            localStorage.removeItem('yolo_three_step_base_path');
+            const cb = document.getElementById('three-step-system');
+            if (cb) cb.checked = false;
         }
-        
-        if (trainingStatus) {
-            if (data.includes('Epoch')) {
-                trainingStatus.textContent = 'Training...';
-                trainingStatus.className = 'badge bg-primary pulse-animation';
-            }
-            if (data.includes('Training complete')) {
-                incrementModels();
-            }
-        }
+    });
+
+    Download.init({
+        ipcRenderer: ipcRenderer,
+        getThreeStepSystemEnabled: () => ThreeStep.getThreeStepSystemEnabled(),
+        getAdminModeEnabled: () => AppState.getAdminModeEnabled(),
+        showMessage: showMessage,
+        checkWorkflowStatus: checkWorkflowStatus,
+        incrementDatasets: incrementDatasets,
+        incrementImages: incrementImages,
+        setThreeStepClassName: (c) => ThreeStep.setThreeStepClassName(c),
+        setThreeStepBasePath: (b) => ThreeStep.setThreeStepBasePath(b),
+        setThreeStepStage: (s) => ThreeStep.setThreeStepStage(s),
+        addClassByName: (n) => Classes.addClassByName(n),
+        setupThreeStepAnnotation: () => ThreeStep.setupThreeStepAnnotation(),
+        showPage: showPage
     });
 
     // Mobile sidebar toggle
@@ -177,7 +209,7 @@ function init() {
     // Classes page
     const addClassBtn = document.getElementById('addClassBtn');
     if (addClassBtn) {
-        addClassBtn.addEventListener('click', addClass);
+        addClassBtn.addEventListener('click', () => Classes.addClass());
     }
     
     // Annotate page
@@ -200,7 +232,7 @@ function init() {
         saveBtn.addEventListener('click', saveAnnotation);
     }
     if (clearBtn) {
-        clearBtn.addEventListener('click', clearAnnotations);
+        clearBtn.addEventListener('click', AnnotationCore.clearAnnotations);
     }
     
     // Train page
@@ -208,7 +240,7 @@ function init() {
     const selectTrainDatasetBtn = document.getElementById('btn-select-train-dataset');
     
     if (trainBtn) {
-        trainBtn.addEventListener('click', startTraining);
+        trainBtn.addEventListener('click', Training.startTraining);
     }
     
     if (selectTrainDatasetBtn) {
@@ -222,14 +254,16 @@ function init() {
         });
     }
     
-    // Canvas events (only if canvas exists)
-    if (canvas) {
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseleave', stopDrawing);
-    }
-    
+    AnnotationCore.init({
+        canvasEl: document.getElementById('annotation-canvas'),
+        getSelectedClass: () => Classes.getSelectedClass(),
+        getClasses: () => Classes.getClasses(),
+        ipcRenderer: ipcRenderer,
+        getDatasetPath: () => AppState.getCurrentDatasetPath(),
+        getImages: () => AppState.getImages(),
+        getCurrentIndex: () => AppState.getCurrentImageIndex()
+    });
+
     // Continue buttons - update statuses when navigating
     const continueFromDownloadBtn = document.getElementById('continueFromDownloadBtn');
     const continueFromClassesBtn = document.getElementById('continueFromClassesBtn');
@@ -281,7 +315,9 @@ function init() {
             const total = parseInt(progressMatch[2]);
             const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
             
-            console.log('Progress:', { current, total, percent });
+            if (window.logger) {
+                window.logger.debug('Download progress', { current, total, percent });
+            }
             
             downloadProgressBar.style.width = percent + '%';
             downloadProgressBar.setAttribute('aria-valuenow', percent);
@@ -312,55 +348,10 @@ function init() {
     checkWorkflowStatus();
 }
 
-/**
- * Opens a dialog to select the download output directory.
- * Updates the download path input field with the selected path.
- */
-async function handleSelectDownloadPath() {
-    try {
-        const result = await ipcRenderer.invoke('select-dataset-folder');
-        if (result) {
-            const outputInput = document.getElementById('download-path');
-            if (outputInput) outputInput.value = result;
-        }
-    } catch (err) {
-        console.error('Failed to select folder:', err);
-        showMessage('Failed to open folder selection: ' + err.message, 'danger');
-    }
-}
-
 const { ipcRenderer } = require('electron');
 const path = require('path');
 
-// State
-let currentDatasetPath = null;
-let images = [];
-// Test page variables
-let testImages = [];
-let testCurrentImageIndex = 0;
-let testDatasetPath = null;
-let testCurrentImage = null;
-let testCanvas = null;
-let testCtx = null;
-let currentImageIndex = 0;
-let currentAnnotations = [];
-let isDrawing = false;
-let startX = 0, startY = 0;
-let currentBox = null;
-
-// Canvas setup
-const canvas = document.getElementById('annotation-canvas');
-const ctx = canvas ? canvas.getContext('2d') : null;
-let currentImage = null;
-let imageScale = 1;
-
-// Status tracking
-let workflowStatus = {
-    download: false,
-    classes: false,
-    annotate: false,
-    train: false
-};
+// State - now managed by AppState module
 
 /**
  * Shows a specific page and updates navigation menu.
@@ -399,9 +390,9 @@ function showPage(pageName) {
     }
     
     // If navigating to train page, check if we need to unlock fields
-    if (pageName === 'train' && !threeStepSystemEnabled) {
+    if (pageName === 'train' && !ThreeStep.getThreeStepSystemEnabled()) {
         setTimeout(() => {
-            setupThreeStepTraining();
+            ThreeStep.setupThreeStepTraining();
         }, 100);
     }
 }
@@ -412,7 +403,7 @@ function showPage(pageName) {
  * @param {boolean} isReady - Whether the step is ready to proceed.
  */
 function updateStepStatus(step, isReady) {
-    workflowStatus[step] = isReady;
+    AppState.updateWorkflowStatus(step, isReady);
     
     const menuItem = document.getElementById(`menu-${step}`);
     const statusIcon = document.getElementById(`status-${step}`);
@@ -435,12 +426,14 @@ function updateStepStatus(step, isReady) {
  * Updates UI indicators based on current state (images loaded, classes defined, annotations saved).
  */
 async function checkWorkflowStatus() {
+    const images = AppState.getImages();
     const hasImages = images.length > 0;
     updateStepStatus('download', hasImages);
     
     const hasClasses = Classes.getClasses().length > 0;
     updateStepStatus('classes', hasClasses);
     
+    const currentDatasetPath = AppState.getCurrentDatasetPath();
     const hasDataset = currentDatasetPath !== null && images.length > 0;
     updateStepStatus('annotate', hasDataset && hasClasses);
     
@@ -454,341 +447,17 @@ async function checkWorkflowStatus() {
                 hasAnnotations = labelFiles && labelFiles.length > 0;
             }
         } catch (e) {
-            console.error('Error checking annotations:', e);
+            if (window.logger) {
+                window.logger.error('Error checking annotations', e);
+            } else {
+                console.error('Error checking annotations:', e);
+            }
         }
     }
     
     const canTrain = hasDataset && hasClasses && hasAnnotations;
     updateStepStatus('train', canTrain);
 }
-
-let downloadInProgress = false;
-
-/**
- * Handles Reddit image download process.
- * Supports both normal mode (10% test + 100% main) and three-step mode (150/350/500 distribution).
- * @param {Event} e - Click event (optional).
- */
-async function handleDownload(e) {
-    if (e) e.preventDefault();
-    console.log('handleDownload called');
-    
-    const subredditInput = document.getElementById('subreddit-input');
-    const classNameInput = document.getElementById('class-name-input');
-    const limitInput = document.getElementById('image-limit');
-    const outputDirInput = document.getElementById('download-path');
-    const downloadBtn = document.getElementById('btn-start-download');
-    const pauseBtn = document.getElementById('btn-pause-download');
-    const resumeBtn = document.getElementById('btn-resume-download');
-    const stopBtn = document.getElementById('btn-stop-download');
-    
-    console.log('Inputs found:', {
-        subreddit: !!subredditInput,
-        class: !!classNameInput,
-        limit: !!limitInput,
-        path: !!outputDirInput,
-        btn: !!downloadBtn
-    });
-    
-    if (!subredditInput || !downloadBtn) {
-        console.error('Missing required elements');
-        return;
-    }
-    
-    const subreddit = subredditInput.value.trim();
-    const className = classNameInput.value.trim() || 'Default';
-    let limit = parseInt(limitInput.value) || 100;
-    let outputDir = outputDirInput ? outputDirInput.value.trim() : '';
-    
-    // Three-step system: limit 1000 (or 10 if admin mode)
-    if (threeStepSystemEnabled) {
-        limit = adminModeEnabled ? 10 : 1000;
-        if (!className) {
-            showMessage('msg-enter-class-name', 'warning');
-            return;
-        }
-    }
-    
-    if (!subreddit) {
-        showMessage('msg-enter-subreddit', 'warning');
-        return;
-    }
-    
-    downloadInProgress = true;
-    downloadBtn.style.display = 'none';
-    if (pauseBtn) pauseBtn.style.display = 'inline-block';
-    if (stopBtn) stopBtn.style.display = 'inline-block';
-    if (resumeBtn) resumeBtn.style.display = 'none';
-    
-    const downloadProgress = document.getElementById('download-progress-container');
-    if (downloadProgress) {
-        downloadProgress.style.display = 'block';
-    }
-    
-    try {
-        let result;
-        
-        if (threeStepSystemEnabled) {
-            // Three-step system: download to temp location first, then distribute
-            // Use user-selected path or default temp path for initial download
-            const tempOutputDir = await ipcRenderer.invoke('get-default-temp-path');
-            result = await ipcRenderer.invoke('download-reddit-images', {
-                subreddit,
-                limit,
-                class_name: className,
-                output_dir: tempOutputDir,
-                three_step_mode: true
-            });
-            
-            // Check if download was stopped
-            if (result?.stopped) {
-                // Already handled by handleStopDownload, just return
-                return;
-            }
-            
-            const downloadedCount = result?.downloaded || result || limit;
-            const testDownloadedCount = result?.test_downloaded || 0;
-            
-            const basePath = outputDir || await ipcRenderer.invoke('get-default-datasets-path');
-            const sourcePath = await ipcRenderer.invoke('join-path', [tempOutputDir, className]);
-            
-            console.log('Distributing images:', {
-                sourcePath: sourcePath,
-                basePath: basePath,
-                className: className,
-                totalCount: downloadedCount,
-                userSelectedPath: outputDir
-            });
-            
-            const sourceExists = await ipcRenderer.invoke('file-exists', sourcePath);
-            if (!sourceExists) {
-                console.error('Source path does not exist:', sourcePath);
-                showMessage('msg-download-error:Source folder not found after download', 'danger');
-                downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-                downloadBtn.disabled = false;
-                return;
-            }
-            
-            try {
-                const distributionResult = await ipcRenderer.invoke('distribute-three-step-images', {
-                    sourcePath: sourcePath,
-                    basePath: basePath,
-                    className: className,
-                    totalCount: downloadedCount
-                });
-                
-                console.log('Distribution result:', distributionResult);
-                
-                // FOR_TESTS should be inside class folder: tempOutputDir/CLASSNAME/FOR_TESTS
-                const tempTestPath = await ipcRenderer.invoke('join-path', [tempOutputDir, className, 'FOR_TESTS']);
-                const testPathExists = await ipcRenderer.invoke('file-exists', tempTestPath);
-                
-                if (testPathExists && distributionResult && distributionResult.basePath) {
-                    // FOR_TESTS should be inside class folder: basePath/CLASSNAME/FOR_TESTS
-                    const classFolderPath = await ipcRenderer.invoke('join-path', [distributionResult.basePath, className]);
-                    const targetTestPath = await ipcRenderer.invoke('join-path', [classFolderPath, 'FOR_TESTS']);
-                    console.log('Copying FOR_TESTS folder from', tempTestPath, 'to', targetTestPath);
-                    
-                    try {
-                        await ipcRenderer.invoke('copy-folder', {
-                            source: tempTestPath,
-                            destination: targetTestPath
-                        });
-                        console.log('FOR_TESTS folder copied successfully');
-                    } catch (error) {
-                        console.error('Error copying FOR_TESTS folder:', error);
-                        // Don't fail the whole process if test folder copy fails
-                    }
-                } else {
-                    if (!testPathExists) {
-                        console.log('FOR_TESTS folder not found in temp directory:', tempTestPath);
-                    }
-                    if (!distributionResult || !distributionResult.basePath) {
-                        console.log('Distribution failed or basePath not returned');
-                    }
-                }
-                
-                if (testPathExists) {
-                    try {
-                        await ipcRenderer.invoke('remove-folder', tempTestPath);
-                        console.log('Temp FOR_TESTS folder cleaned up');
-                    } catch (error) {
-                        console.error('Error cleaning up temp FOR_TESTS folder:', error);
-                    }
-                }
-                try {
-                    await ipcRenderer.invoke('remove-folder', sourcePath);
-                } catch (e) {
-                    console.error('Error cleaning temp class folder:', e);
-                }
-                if (distributionResult && distributionResult.basePath) {
-                    const classFolderExists = await ipcRenderer.invoke('file-exists', distributionResult.basePath);
-                    console.log('Class folder exists:', classFolderExists, 'at:', distributionResult.basePath);
-                    
-                    const folder15 = await ipcRenderer.invoke('join-path', [distributionResult.basePath, `${className}_15`]);
-                    const folder15Exists = await ipcRenderer.invoke('file-exists', folder15);
-                    console.log('Folder 15 exists:', folder15Exists, 'at:', folder15);
-                    
-                    if (!folder15Exists) {
-                        console.error('Folder 15 was not created!');
-                        showMessage('msg-download-error:Failed to create folder structure', 'danger');
-                        downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-                        downloadBtn.disabled = false;
-                        return;
-                    }
-                }
-                
-                setThreeStepClassName(className);
-                if (distributionResult && distributionResult.basePath) {
-                    setThreeStepBasePath(distributionResult.basePath);
-                    console.log('Three-step base path saved:', distributionResult.basePath);
-                } else {
-                    console.error('Distribution result missing basePath:', distributionResult);
-                    showMessage('msg-download-error:Failed to create folder structure', 'danger');
-                    downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-                    downloadBtn.disabled = false;
-                    return;
-                }
-                
-                setThreeStepStage(1);
-                
-                Classes.addClassByName(className);
-                
-                incrementDatasets();
-                incrementImages(downloadedCount);
-                
-                showMessage('msg-download-complete', 'success');
-                setTimeout(() => {
-                    showPage('annotate');
-                    // Wait a bit more for page to be ready
-                    setTimeout(() => {
-                        setupThreeStepAnnotation();
-                    }, 500);
-                }, 1000);
-            } catch (error) {
-                console.error('Error during distribution:', error);
-                showMessage(`msg-download-error:${error.message}`, 'danger');
-                downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-                downloadBtn.disabled = false;
-                return;
-            }
-        } else {
-            // Normal download (without three-step distribution)
-            result = await ipcRenderer.invoke('download-reddit-images', {
-            subreddit,
-            limit,
-            class_name: className,
-            output_dir: outputDir,
-            three_step_mode: false
-        });
-        
-            // Check if download was stopped
-            if (result?.stopped) {
-                // Already handled by handleStopDownload, just return
-                return;
-            }
-        
-            incrementDatasets();
-            const downloadedCount = result?.downloaded || result || limit;
-            const testDownloadedCount = result?.test_downloaded || 0;
-            incrementImages(downloadedCount);
-            
-            showMessage('msg-download-complete', 'success');
-        }
-        
-        downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-        downloadBtn.style.display = 'inline-block';
-        if (pauseBtn) pauseBtn.style.display = 'none';
-        if (resumeBtn) resumeBtn.style.display = 'none';
-        if (stopBtn) stopBtn.style.display = 'none';
-        downloadInProgress = false;
-        checkWorkflowStatus();
-    } catch (e) {
-        showMessage(`msg-download-error:${e.message}`, 'danger');
-        downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-        downloadBtn.style.display = 'inline-block';
-        const pauseBtn = document.getElementById('btn-pause-download');
-        const resumeBtn = document.getElementById('btn-resume-download');
-        const stopBtn = document.getElementById('btn-stop-download');
-        if (pauseBtn) pauseBtn.style.display = 'none';
-        if (resumeBtn) resumeBtn.style.display = 'none';
-        if (stopBtn) stopBtn.style.display = 'none';
-        downloadInProgress = false;
-    }
-}
-
-/**
- * Pauses the current Reddit download process.
- * @param {Event} e - Click event.
- */
-async function handlePauseDownload(e) {
-    if (e) e.preventDefault();
-    const pauseBtn = document.getElementById('btn-pause-download');
-    const resumeBtn = document.getElementById('btn-resume-download');
-    
-    try {
-        const result = await ipcRenderer.invoke('pause-download');
-        if (result.success) {
-            if (pauseBtn) pauseBtn.style.display = 'none';
-            if (resumeBtn) resumeBtn.style.display = 'inline-block';
-            showMessage('msg-download-paused', 'warning');
-        }
-    } catch (e) {
-        console.error('Error pausing download:', e);
-    }
-}
-
-/**
- * Resumes a paused Reddit download process.
- * @param {Event} e - Click event.
- */
-async function handleResumeDownload(e) {
-    if (e) e.preventDefault();
-    const pauseBtn = document.getElementById('btn-pause-download');
-    const resumeBtn = document.getElementById('btn-resume-download');
-    
-    try {
-        const result = await ipcRenderer.invoke('resume-download');
-        if (result.success) {
-            if (pauseBtn) pauseBtn.style.display = 'inline-block';
-            if (resumeBtn) resumeBtn.style.display = 'none';
-            showMessage('msg-download-resumed', 'success');
-        }
-    } catch (e) {
-        console.error('Error resuming download:', e);
-    }
-}
-
-/**
- * Stops the current Reddit download process.
- * @param {Event} e - Click event.
- */
-async function handleStopDownload(e) {
-    if (e) e.preventDefault();
-    const downloadBtn = document.getElementById('btn-start-download');
-    const pauseBtn = document.getElementById('btn-pause-download');
-    const resumeBtn = document.getElementById('btn-resume-download');
-    const stopBtn = document.getElementById('btn-stop-download');
-    
-    try {
-        const result = await ipcRenderer.invoke('stop-download');
-        if (result.success) {
-            downloadInProgress = false;
-            downloadBtn.innerHTML = '<i class="bi bi-download me-2"></i>Start Download';
-            downloadBtn.style.display = 'inline-block';
-            if (pauseBtn) pauseBtn.style.display = 'none';
-            if (resumeBtn) resumeBtn.style.display = 'none';
-            if (stopBtn) stopBtn.style.display = 'none';
-            showMessage('msg-download-stopped', 'warning');
-        }
-    } catch (e) {
-        console.error('Error stopping download:', e);
-    }
-}
-
-window.handlePauseDownload = handlePauseDownload;
-window.handleResumeDownload = handleResumeDownload;
-window.handleStopDownload = handleStopDownload;
 
 /**
  * Opens the models history folder in the system file manager.
@@ -797,11 +466,19 @@ async function openModelsFolder() {
     try {
         const result = await ipcRenderer.invoke('open-models-folder');
         if (!result.success) {
-            console.error('Error opening models folder:', result.error);
+            if (window.logger) {
+                window.logger.error('Error opening models folder', result.error);
+            } else {
+                console.error('Error opening models folder:', result.error);
+            }
             showMessage(`msg-error-opening-folder:${result.error}`, 'danger');
         }
     } catch (e) {
-        console.error('Error opening models folder:', e);
+        if (window.logger) {
+            window.logger.error('Error opening models folder', e);
+        } else {
+            console.error('Error opening models folder:', e);
+        }
         showMessage(`msg-error-opening-folder:${e.message}`, 'danger');
     }
 }
@@ -924,9 +601,16 @@ function createToastContainer() {
  * Loads images from the selected folder and updates the annotation interface.
  */
 async function handleLoadDataset() {
-    const selectedPath = await ipcRenderer.invoke('select-dataset-folder');
-    if (selectedPath) {
-        await loadDataset(selectedPath);
+    try {
+        const selectedPath = await ipcRenderer.invoke('select-dataset-folder');
+        if (selectedPath) {
+            await loadDataset(selectedPath);
+        }
+    } catch (error) {
+        const message = window.ErrorHandler ? 
+            window.ErrorHandler.handleError(error, 'Loading dataset') : 
+            error.message;
+        showMessage(message, 'danger');
     }
 }
 
@@ -936,33 +620,41 @@ async function handleLoadDataset() {
  * @param {boolean} [showNotification=true] - Whether to show a success notification.
  */
 async function loadDataset(datasetPath, showNotification = true) {
-    currentDatasetPath = datasetPath;
-    const datasetPathDisplay = document.getElementById('datasetPath');
-    if (datasetPathDisplay) {
-        datasetPathDisplay.innerText = path.basename(datasetPath);
-    }
-    
-    images = await ipcRenderer.invoke('load-dataset', datasetPath);
-    currentImageIndex = 0;
-    
-    const totalImagesEl = document.getElementById('totalImages');
-    if (totalImagesEl) {
-        totalImagesEl.textContent = images.length;
-    }
-    
-    if (images.length > 0) {
-        await loadImage(0);
-        if (showNotification) {
-            showMessage(`msg-images-loaded:${images.length}`, 'success');
+    try {
+        AppState.setCurrentDatasetPath(datasetPath);
+        const datasetPathDisplay = document.getElementById('datasetPath');
+        if (datasetPathDisplay) {
+            datasetPathDisplay.innerText = path.basename(datasetPath);
         }
-    } else {
-        if (showNotification) {
-            showMessage('msg-no-images-found', 'warning');
+        
+        const loadedImages = await ipcRenderer.invoke('load-dataset', datasetPath);
+        AppState.setImages(loadedImages);
+        AppState.setCurrentImageIndex(0);
+        
+        const totalImagesEl = document.getElementById('totalImages');
+        if (totalImagesEl) {
+            totalImagesEl.textContent = loadedImages.length;
         }
+        
+        if (loadedImages.length > 0) {
+            await loadImage(0);
+            if (showNotification) {
+                showMessage(`msg-images-loaded:${loadedImages.length}`, 'success');
+            }
+        } else {
+            if (showNotification) {
+                showMessage('msg-no-images-found', 'warning');
+            }
+        }
+        
+        updateProgress();
+        checkWorkflowStatus();
+    } catch (error) {
+        const message = window.ErrorHandler ? 
+            window.ErrorHandler.handleError(error, 'Loading dataset') : 
+            error.message;
+        showMessage(message, 'danger');
     }
-    
-    updateProgress();
-    checkWorkflowStatus();
 }
 
 window.navigateImage = navigateImage; // Make global
@@ -973,9 +665,10 @@ window.navigateImage = navigateImage; // Make global
  * @param {number} index - Index of the image to load (0-based).
  */
 async function loadImage(index) {
+    const images = AppState.getImages();
     if (index < 0 || index >= images.length) return;
     
-    currentImageIndex = index;
+    AppState.setCurrentImageIndex(index);
     
     const imageCounter = document.getElementById('image-counter');
     const currentFileName = document.getElementById('current-file-name');
@@ -986,6 +679,7 @@ async function loadImage(index) {
     
     updateNavigationButtons();
     
+    const currentDatasetPath = AppState.getCurrentDatasetPath();
     const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(currentDatasetPath, 'images'));
     
     let imagePath;
@@ -1003,34 +697,23 @@ async function loadImage(index) {
         currentFileName.textContent = images[index];
     }
     
-    currentImage = new Image();
-    
-    // Convert path to file URL to ensure it loads correctly in Electron
+    const img = new Image();
     const fileUrl = 'file://' + imagePath.replace(/\\/g, '/');
-    currentImage.src = fileUrl;
-    
-    console.log('Loading image from:', fileUrl);
-    
-    currentImage.onload = () => {
+    img.src = fileUrl;
+    if (window.logger) {
+        window.logger.debug('Loading image', { fileUrl });
+    }
+    img.onload = () => {
         const placeholderText = document.getElementById('placeholder-text');
-        if (placeholderText) {
-            placeholderText.style.display = 'none';
-        }
-
+        if (placeholderText) placeholderText.style.display = 'none';
         const container = document.getElementById('annotation-container');
-        const containerWidth = container.clientWidth;
-        const containerHeight = container.clientHeight;
-
-        let scale = Math.min(containerWidth / currentImage.width, containerHeight / currentImage.height);
-        scale = scale * 0.95;
-
-        canvas.width = currentImage.width * scale;
-        canvas.height = currentImage.height * scale;
-        
-        imageScale = scale;
-        
-        drawImage();
-        loadAnnotations().then(() => {
+        const containerWidth = container ? container.clientWidth : 0;
+        const containerHeight = container ? container.clientHeight : 0;
+        let scale = Math.min(containerWidth / img.width, containerHeight / img.height) * 0.95;
+        AnnotationCore.setCanvasSize(img.width * scale, img.height * scale);
+        AnnotationCore.setImage(img);
+        AnnotationCore.drawImage();
+        AnnotationCore.loadAnnotations().then(() => {
             updateProgress();
             
             const autoLabelBtn = document.getElementById('btn-auto-label');
@@ -1038,8 +721,10 @@ async function loadImage(index) {
                 setTimeout(() => {
                     handleAutoLabel(true);
                     
-                    if (threeStepSystemEnabled && getThreeStepStage() === 3) {
+                    if (ThreeStep.getThreeStepSystemEnabled() && ThreeStep.getThreeStepStage() === 3) {
                         setTimeout(() => {
+                            const currentImageIndex = AppState.getCurrentImageIndex();
+                            const images = AppState.getImages();
                             if (currentImageIndex < images.length - 1) {
                                 navigateImage(1);
                             }
@@ -1056,6 +741,8 @@ async function loadImage(index) {
  * Disables buttons at the start/end of the image list.
  */
 function updateNavigationButtons() {
+    const currentImageIndex = AppState.getCurrentImageIndex();
+    const images = AppState.getImages();
     const isFirst = currentImageIndex === 0;
     const isLast = currentImageIndex === images.length - 1;
     
@@ -1098,223 +785,11 @@ function updateNavigationButtons() {
  */
 function updateProgress() {
     const progressBar = document.getElementById('progressBar');
+    const images = AppState.getImages();
+    const currentImageIndex = AppState.getCurrentImageIndex();
     if (progressBar && images.length > 0) {
         const percent = Math.round(((currentImageIndex + 1) / images.length) * 100);
         progressBar.style.width = percent + '%';
-    }
-}
-
-/**
- * Draws the current image on the canvas.
- * Clears the canvas and redraws the image with all annotations.
- */
-function drawImage() {
-    if (!ctx || !currentImage) return;
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Draw image scaled to canvas size
-    ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
-    drawAnnotations();
-}
-
-/**
- * Loads existing annotations from the label file for the current image.
- * Parses YOLO format labels and converts them to annotation objects.
- * @returns {Promise<void>}
- */
-async function loadAnnotations() {
-    currentAnnotations = [];
-    
-    if (currentDatasetPath && images.length > 0) {
-        try {
-            const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(currentDatasetPath, 'images'));
-            let imagePath;
-            if (hasImagesSubdir) {
-                imagePath = path.join(currentDatasetPath, 'images', images[currentImageIndex]);
-            } else {
-                imagePath = path.join(currentDatasetPath, images[currentImageIndex]);
-            }
-            
-            // Labels should be in the same directory as images (or parent if images is subfolder)
-            let datasetDir;
-            if (hasImagesSubdir) {
-                datasetDir = path.dirname(path.dirname(imagePath)); // CLASSNAME/images -> CLASSNAME
-            } else {
-                datasetDir = path.dirname(imagePath); // CLASSNAME -> CLASSNAME
-            }
-            const labelsDir = path.join(datasetDir, 'labels');
-            const imageName = path.basename(imagePath, path.extname(imagePath));
-            const labelPath = path.join(labelsDir, `${imageName}.txt`);
-            
-            const labelExists = await ipcRenderer.invoke('file-exists', labelPath);
-            if (labelExists) {
-                const labelContent = await ipcRenderer.invoke('read-file', labelPath);
-                const lines = labelContent.trim().split('\n').filter(line => line.trim());
-                
-                lines.forEach(line => {
-                    const parts = line.trim().split(' ');
-                    if (parts.length >= 5) {
-                        const classId = parseInt(parts[0]);
-                        const centerX = parseFloat(parts[1]);
-                        const centerY = parseFloat(parts[2]);
-                        const width = parseFloat(parts[3]);
-                        const height = parseFloat(parts[4]);
-                        
-                        // Convert from YOLO format (center_x, center_y, width, height) to (x, y, w, h)
-                        const x = centerX - width / 2;
-                        const y = centerY - height / 2;
-                        
-                        currentAnnotations.push({
-                            x: x,
-                            y: y,
-                            w: width,
-                            h: height,
-                            centerX: centerX,
-                            centerY: centerY,
-                            width: width,
-                            height: height,
-                            className: (Classes.getClasses()[classId] || `Class_${classId}`)
-                        });
-                    }
-                });
-            }
-        } catch (e) {
-            console.error('Error loading annotations:', e);
-        }
-    }
-    
-    drawAnnotations();
-    updateAnnotationCount();
-}
-
-function updateAnnotationCount() {
-    const annotationCount = document.getElementById('annotationCount');
-    if (annotationCount) {
-        annotationCount.textContent = `${currentAnnotations.length} annotation${currentAnnotations.length !== 1 ? 's' : ''}`;
-    }
-}
-
-/**
- * Draws all current annotations (bounding boxes) on the canvas.
- * Uses different colors for different classes.
- */
-function drawAnnotations() {
-    if (!ctx) return;
-    
-    currentAnnotations.forEach(ann => {
-        const x = ann.x * canvas.width;
-        const y = ann.y * canvas.height;
-        const w = ann.w * canvas.width;
-        const h = ann.h * canvas.height;
-        
-        ctx.strokeStyle = '#d00000';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, w, h);
-        
-        // Label background
-        ctx.fillStyle = 'rgba(208, 0, 0, 0.8)';
-        const labelText = ann.className;
-        ctx.font = '14px Arial';
-        const textMetrics = ctx.measureText(labelText);
-        ctx.fillRect(x, y - 20, textMetrics.width + 8, 18);
-        
-        // Label text
-        ctx.fillStyle = '#fff';
-        ctx.fillText(labelText, x + 4, y - 5);
-    });
-    
-    // Draw current box if drawing
-    if (currentBox) {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(currentBox.x, currentBox.y, currentBox.w, currentBox.h);
-    }
-}
-
-/**
- * Starts drawing a new bounding box annotation.
- * @param {MouseEvent} e - Mouse event from canvas.
- */
-function startDrawing(e) {
-    if (!canvas) return;
-    isDrawing = true;
-    const rect = canvas.getBoundingClientRect();
-    startX = e.clientX - rect.left;
-    startY = e.clientY - rect.top;
-}
-
-/**
- * Updates the current bounding box while drawing.
- * @param {MouseEvent} e - Mouse event from canvas.
- */
-function draw(e) {
-    if (!isDrawing || !canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
-    
-    currentBox = {
-        x: Math.min(startX, currentX),
-        y: Math.min(startY, currentY),
-        w: Math.abs(currentX - startX),
-        h: Math.abs(currentY - startY)
-    };
-    
-    drawImage();
-}
-
-/**
- * Completes drawing a bounding box and adds it to annotations.
- * @param {MouseEvent} e - Mouse event from canvas.
- */
-function stopDrawing(e) {
-    if (!isDrawing) return;
-    isDrawing = false;
-    
-    if (currentBox && currentBox.w > 10 && currentBox.h > 10) {
-        // Normalize coordinates
-        const ann = {
-            x: currentBox.x / canvas.width,
-            y: currentBox.y / canvas.height,
-            w: currentBox.w / canvas.width,
-            h: currentBox.h / canvas.height,
-            centerX: (currentBox.x + currentBox.w / 2) / canvas.width,
-            centerY: (currentBox.y + currentBox.h / 2) / canvas.height,
-            width: currentBox.w / canvas.width,
-            height: currentBox.h / canvas.height,
-            className: Classes.getSelectedClass()
-        };
-        
-        currentAnnotations.push(ann);
-        updateAnnotationCount();
-    }
-    
-    currentBox = null;
-    drawImage();
-}
-
-/**
- * Clears all annotations for the current image.
- * Removes all bounding boxes from the canvas.
- */
-function clearAnnotations() {
-    if (confirm('Clear all annotations for this image?')) {
-        currentAnnotations = [];
-        drawImage();
-        updateAnnotationCount();
-    }
-}
-
-/**
- * Removes the last added annotation (undo).
- * Updates the canvas to reflect the change.
- */
-function undoAnnotation() {
-    if (currentAnnotations.length > 0) {
-        currentAnnotations.pop();
-        drawImage();
-        updateAnnotationCount();
     }
 }
 
@@ -1325,6 +800,7 @@ function undoAnnotation() {
  * @returns {Promise<void>}
  */
 async function saveAnnotation() {
+    const images = AppState.getImages();
     if (images.length === 0) {
         showMessage('msg-no-images-loaded', 'warning');
         return;
@@ -1336,6 +812,8 @@ async function saveAnnotation() {
     //     return;
     // }
     
+    const currentDatasetPath = AppState.getCurrentDatasetPath();
+    const currentImageIndex = AppState.getCurrentImageIndex();
     const imagePath = path.join(currentDatasetPath, 'images', images[currentImageIndex]);
     let targetPath;
     if (currentDatasetPath) {
@@ -1353,7 +831,7 @@ async function saveAnnotation() {
     try {
         await ipcRenderer.invoke('save-annotation', {
             imagePath: targetPath,
-            annotations: currentAnnotations,
+            annotations: AnnotationCore.getAnnotations(),
             classNames: Classes.getClasses()
         });
         
@@ -1361,9 +839,9 @@ async function saveAnnotation() {
         
         checkWorkflowStatus();
         
-        currentAnnotations = [];
+        AnnotationCore.setAnnotations([]);
         
-        if (threeStepSystemEnabled && getThreeStepStage() === 3) {
+        if (ThreeStep.getThreeStepSystemEnabled() && ThreeStep.getThreeStepStage() === 3) {
             const autoBtn = document.getElementById('btn-auto-label');
             if (autoBtn && autoBtn.classList.contains('active')) {
                 setTimeout(() => {
@@ -1376,7 +854,10 @@ async function saveAnnotation() {
         navigateImage(1);
         }
     } catch (e) {
-        showMessage(`msg-save-error:${e.message}`, 'danger');
+        const message = window.ErrorHandler ? 
+            window.ErrorHandler.handleError(e, 'Saving annotation') : 
+            `msg-save-error:${e.message}`;
+        showMessage(message, 'danger');
     }
 }
 
@@ -1398,7 +879,7 @@ function toggleAutoLabel() {
         btn.classList.add('active');
         btn.classList.remove('btn-outline-warning');
         btn.classList.add('btn-warning');
-        if (currentImage) {
+        if (AnnotationCore.hasImage()) {
             handleAutoLabel(true);
         }
     }
@@ -1411,7 +892,7 @@ function toggleAutoLabel() {
  * @returns {Promise<void>}
  */
 async function handleAutoLabel(autoTriggered = false) {
-    if (images.length === 0 || !currentImage) {
+    if (images.length === 0 || !AnnotationCore.hasImage()) {
         if (!autoTriggered) {
             showMessage('msg-no-image-loaded', 'warning');
         }
@@ -1431,8 +912,8 @@ async function handleAutoLabel(autoTriggered = false) {
     try {
         // Three-step system: use saved model path if available
         let modelPath;
-        if (threeStepSystemEnabled && threeStepModelPath) {
-            modelPath = threeStepModelPath;
+        if (ThreeStep.getThreeStepSystemEnabled() && ThreeStep.getThreeStepModelPath()) {
+            modelPath = ThreeStep.getThreeStepModelPath();
         } else {
             modelPath = await ipcRenderer.invoke('get-trained-model-path');
         }
@@ -1448,11 +929,11 @@ async function handleAutoLabel(autoTriggered = false) {
              return;
         }
 
-        // We need the file system path, not the file:// URL
-        let imagePath = currentImage.src;
-        if (imagePath.startsWith('file://')) {
+        let imagePath = AnnotationCore.getCurrentImageSrc();
+        if (imagePath && imagePath.startsWith('file://')) {
             imagePath = decodeURIComponent(imagePath.slice(7));
         }
+        if (!imagePath) return;
 
         const confInput = document.getElementById('auto-label-conf');
         const confidence = confInput ? parseFloat(confInput.value) : 0.25;
@@ -1483,7 +964,7 @@ async function handleAutoLabel(autoTriggered = false) {
 
             if (newAnnotations.length > 0) {
                 // If auto-triggered, always replace without asking
-                if (currentAnnotations.length > 0 && !autoTriggered) {
+                if (AnnotationCore.getAnnotations().length > 0 && !autoTriggered) {
                     if (!confirm(`Found ${newAnnotations.length} objects. Replace existing annotations?`)) {
                         if (btn && !autoTriggered) {
                         btn.disabled = false;
@@ -1493,9 +974,9 @@ async function handleAutoLabel(autoTriggered = false) {
                     }
                 }
                 
-                currentAnnotations = newAnnotations;
-                drawAnnotations();
-                updateAnnotationCount();
+                AnnotationCore.setAnnotations(newAnnotations);
+                AnnotationCore.drawAnnotations();
+                AnnotationCore.updateAnnotationCount();
                 if (!autoTriggered) {
                     showMessage(`msg-auto-labeled:${newAnnotations.length}`, 'success');
                 }
@@ -1526,182 +1007,12 @@ async function handleAutoLabel(autoTriggered = false) {
  * @param {number} direction - Navigation direction (-1 for previous, 1 for next).
  */
 function navigateImage(direction) {
-    // Clear current annotations before navigating to prevent them from being carried over
-    currentAnnotations = [];
-    
+    AnnotationCore.setAnnotations([]);
+    const currentImageIndex = AppState.getCurrentImageIndex();
+    const images = AppState.getImages();
     const newIndex = currentImageIndex + direction;
     if (newIndex >= 0 && newIndex < images.length) {
         loadImage(newIndex);
-    }
-}
-
-/**
- * Starts YOLOv8 model training with the specified parameters.
- * Handles both normal mode and three-step system mode.
- * Automatically determines class name and learning percentage for model naming.
- * @returns {Promise<void>}
- */
-async function startTraining() {
-    const trainDatasetPath = document.getElementById('train-dataset-path');
-    const trainBtn = document.getElementById('btn-start-training');
-    
-    if (!trainBtn) return;
-    
-    let datasetPath;
-    let epochs, batchSize, imgSize;
-    
-    let modelClassName = null;
-    let modelLearningPercent = 100;
-    
-    if (threeStepSystemEnabled) {
-        // Three-step system: use configured paths
-        // Reload state to ensure we have latest values
-        threeStepBasePath = getThreeStepBasePath();
-        threeStepClassName = getThreeStepClassName();
-        
-        const stage = getThreeStepStage();
-        console.log('Start training for three-step system, stage:', stage);
-        
-        modelClassName = threeStepClassName;
-        
-        if (stage === 3.5) {
-            // Final training: use CLASSNAME_100 folder
-            const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
-            datasetPath = folder100;
-            epochs = 100;
-            modelLearningPercent = 100;
-            console.log('Final training path:', folder100);
-        } else {
-            // Stage 1.5 or 2.5: use current stage folder
-            // Stage 1.5 = training after stage 1 (15%) -> use folder 15
-            // Stage 2.5 = training after stage 2 (35%) -> use folder 35
-            // IMPORTANT: stage is a number (1.5 or 2.5), compare as number
-            const stageNum = (stage === 1.5 || stage === '1.5') ? 1 : 2;
-            const folderName = `${threeStepClassName}_${stageNum === 1 ? '15' : '35'}`;
-            const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
-            datasetPath = stagePath;
-            modelLearningPercent = stageNum === 1 ? 15 : 35;
-            console.log('Training path for stage', stage, ':', stagePath, '(folder:', folderName, ')');
-            epochs = parseInt(document.getElementById('epochs')?.value || 50);
-            if (epochs < 1) epochs = 1;
-            if (epochs > 100) epochs = 100;
-        }
-        batchSize = 16;
-        imgSize = 640;
-    } else {
-    if (trainDatasetPath && !trainDatasetPath.value && currentDatasetPath) {
-        trainDatasetPath.value = currentDatasetPath;
-    }
-    
-        datasetPath = trainDatasetPath ? trainDatasetPath.value.trim() : currentDatasetPath;
-    
-    if (!datasetPath) {
-            showMessage('msg-select-dataset', 'warning');
-        return;
-    }
-    
-    const epochsInput = document.getElementById('epochs');
-    const batchInput = document.getElementById('batch-size');
-    const imgSizeInput = document.getElementById('img-size');
-        
-        epochs = parseInt(epochsInput ? epochsInput.value : 50) || 50;
-        batchSize = parseInt(batchInput ? batchInput.value : 16) || 16;
-        imgSize = parseInt(imgSizeInput ? imgSizeInput.value : 640) || 640;
-    }
-    
-    const trainingStatus = document.getElementById('training-status-badge');
-    const trainingOutput = document.getElementById('training-log');
-    
-    trainBtn.disabled = true;
-    trainBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Training...';
-    
-    if (trainingStatus) {
-        trainingStatus.innerText = 'Initializing...';
-        trainingStatus.className = 'badge bg-warning text-dark';
-    }
-    if (trainingOutput) {
-        trainingOutput.innerHTML = '<div class="text-success">> Initializing training sequence...</div>';
-    }
-    
-    if (!modelClassName) {
-        modelClassName = Classes.getSelectedClass() || (Classes.getClasses().length > 0 ? Classes.getClasses()[0] : null);
-    }
-    
-    try {
-        await ipcRenderer.invoke('train-model', {
-            datasetPath: datasetPath,
-            epochs,
-            batchSize,
-            imgSize,
-            classNames: Classes.getClasses(),
-            className: modelClassName,
-            learningPercent: modelLearningPercent
-        });
-        
-        showMessage('msg-training-complete', 'success');
-        trainBtn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i> Start Training';
-        
-        // Increment models counter
-        incrementModels();
-        
-        if (trainingStatus) {
-            trainingStatus.innerText = 'Completed';
-            trainingStatus.className = 'badge bg-success';
-        }
-        
-        // Three-step system: proceed to next stage
-        if (threeStepSystemEnabled) {
-            const stage = getThreeStepStage();
-            if (stage === 1.5 || stage === 2.5) {
-                // Training complete, save model path and proceed
-                try {
-                    threeStepModelPath = await ipcRenderer.invoke('get-trained-model-path');
-                    if (!threeStepModelPath) {
-                        // Fallback to default path
-                        threeStepModelPath = await ipcRenderer.invoke('join-path', [
-                            await ipcRenderer.invoke('get-default-datasets-path'),
-                            '..', 'models', 'custom_model', 'weights', 'best.pt'
-                        ]);
-        }
-    } catch (e) {
-                    console.error('Error getting model path:', e);
-                }
-                setTimeout(() => {
-                    proceedToNextThreeStepStage();
-                }, 1000);
-            } else if (stage === 3.5) {
-                // Final training complete
-                showMessage('msg-three-step-complete', 'success');
-                // Reset three-step system
-                threeStepSystemEnabled = false;
-                localStorage.removeItem('yolo_three_step_enabled');
-                localStorage.removeItem('yolo_three_step_stage');
-                localStorage.removeItem('yolo_three_step_class_name');
-                localStorage.removeItem('yolo_three_step_base_path');
-                // Update checkbox
-                const checkbox = document.getElementById('three-step-system');
-                if (checkbox) {
-                    checkbox.checked = false;
-                }
-            }
-        }
-    } catch (e) {
-        showMessage(`msg-training-failed:${e.message}`, 'danger');
-        trainBtn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i> Start Training';
-        
-        if (trainingStatus) {
-            trainingStatus.innerText = 'Failed';
-            trainingStatus.className = 'badge bg-danger';
-        }
-        
-        if (trainingOutput) {
-             const div = document.createElement('div');
-             div.textContent = `Error: ${e.message}`;
-             div.className = 'text-danger';
-             trainingOutput.appendChild(div);
-        }
-    } finally {
-        trainBtn.disabled = false;
     }
 }
 
@@ -1778,9 +1089,16 @@ window.useBaseModel = async function() {
  * Loads images from the selected folder for model testing.
  */
 async function handleLoadTestFolder() {
-    const selectedPath = await ipcRenderer.invoke('select-dataset-folder');
-    if (selectedPath) {
-        await loadTestDataset(selectedPath);
+    try {
+        const selectedPath = await ipcRenderer.invoke('select-dataset-folder');
+        if (selectedPath) {
+            await loadTestDataset(selectedPath);
+        }
+    } catch (error) {
+        const message = window.ErrorHandler ? 
+            window.ErrorHandler.handleError(error, 'Loading test dataset') : 
+            error.message;
+        showMessage(message, 'danger');
     }
 }
 
@@ -1789,25 +1107,33 @@ async function handleLoadTestFolder() {
  * @param {string} datasetPath - Path to the test dataset folder.
  */
 async function loadTestDataset(datasetPath) {
-    testDatasetPath = datasetPath;
-    
-    // Load images from folder
-    testImages = await ipcRenderer.invoke('load-dataset', datasetPath);
-    testCurrentImageIndex = 0;
-    
-    const testImageCounter = document.getElementById('test-image-counter');
-    if (testImageCounter) {
-        testImageCounter.textContent = `0 / ${testImages.length}`;
+    try {
+        AppState.setTestDatasetPath(datasetPath);
+        
+        // Load images from folder
+        const loadedTestImages = await ipcRenderer.invoke('load-dataset', datasetPath);
+        AppState.setTestImages(loadedTestImages);
+        AppState.setTestCurrentImageIndex(0);
+        
+        const testImageCounter = document.getElementById('test-image-counter');
+        if (testImageCounter) {
+            testImageCounter.textContent = `0 / ${loadedTestImages.length}`;
+        }
+        
+        if (loadedTestImages.length > 0) {
+            await loadTestImage(0);
+            showMessage(`msg-images-loaded:${loadedTestImages.length}`, 'success');
+        } else {
+            showMessage('msg-no-images-found', 'warning');
+        }
+        
+        updateTestNavigationButtons();
+    } catch (error) {
+        const message = window.ErrorHandler ? 
+            window.ErrorHandler.handleError(error, 'Loading test dataset') : 
+            error.message;
+        showMessage(message, 'danger');
     }
-    
-    if (testImages.length > 0) {
-        await loadTestImage(0);
-        showMessage(`msg-images-loaded:${testImages.length}`, 'success');
-    } else {
-        showMessage('msg-no-images-found', 'warning');
-    }
-    
-    updateTestNavigationButtons();
 }
 
 /**
@@ -1816,9 +1142,10 @@ async function loadTestDataset(datasetPath) {
  * @param {number} index - Index of the image to load (0-based).
  */
 async function loadTestImage(index) {
+    const testImages = AppState.getTestImages();
     if (index < 0 || index >= testImages.length) return;
     
-    testCurrentImageIndex = index;
+    AppState.setTestCurrentImageIndex(index);
     
     const testImageCounter = document.getElementById('test-image-counter');
     const testCurrentFileName = document.getElementById('test-current-file-name');
@@ -1829,6 +1156,7 @@ async function loadTestImage(index) {
     
     updateTestNavigationButtons();
     
+    const testDatasetPath = AppState.getTestDatasetPath();
     const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
     
     let imagePath;
@@ -1846,7 +1174,8 @@ async function loadTestImage(index) {
         testCurrentFileName.textContent = testImages[index];
     }
     
-    testCurrentImage = new Image();
+    const testCurrentImage = new Image();
+    AppState.setTestCurrentImage(testCurrentImage);
     const fileUrl = 'file://' + imagePath.replace(/\\/g, '/');
     testCurrentImage.src = fileUrl;
     
@@ -1856,15 +1185,20 @@ async function loadTestImage(index) {
             placeholderText.style.display = 'none';
         }
         
+        let testCanvas = AppState.getTestCanvas();
+        let testCtx = AppState.getTestCtx();
         if (!testCanvas) {
             testCanvas = document.getElementById('test-canvas');
             testCtx = testCanvas.getContext('2d');
+            AppState.setTestCanvas(testCanvas);
+            AppState.setTestCtx(testCtx);
         }
         
         const container = document.getElementById('test-container');
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
         
+        const testCurrentImage = AppState.getTestCurrentImage();
         let scale = Math.min(containerWidth / testCurrentImage.width, containerHeight / testCurrentImage.height);
         scale = scale * 0.95;
         
@@ -1884,7 +1218,11 @@ async function loadTestImage(index) {
     };
     
     testCurrentImage.onerror = () => {
-        console.error('Failed to load test image:', fileUrl);
+        if (window.logger) {
+            window.logger.error('Failed to load test image', { fileUrl });
+        } else {
+            console.error('Failed to load test image:', fileUrl);
+        }
         showMessage('msg-image-load-error', 'danger');
     };
 }
@@ -1895,6 +1233,8 @@ async function loadTestImage(index) {
 function updateTestNavigationButtons() {
     const prevBtn = document.getElementById('btn-test-prev');
     const nextBtn = document.getElementById('btn-test-next');
+    const testCurrentImageIndex = AppState.getTestCurrentImageIndex();
+    const testImages = AppState.getTestImages();
     
     if (prevBtn) {
         prevBtn.style.display = testCurrentImageIndex > 0 ? 'block' : 'none';
@@ -1909,6 +1249,8 @@ function updateTestNavigationButtons() {
  * @param {number} direction - Navigation direction (-1 for previous, 1 for next).
  */
 window.navigateTestImage = async function(direction) {
+    const testCurrentImageIndex = AppState.getTestCurrentImageIndex();
+    const testImages = AppState.getTestImages();
     const newIndex = testCurrentImageIndex + direction;
     if (newIndex >= 0 && newIndex < testImages.length) {
         await loadTestImage(newIndex);
@@ -1964,10 +1306,14 @@ async function runTestPrediction(imagePath) {
                 const displayHeight = resultImg.height * scale;
                 
                 // Set canvas size and draw
-                testCanvas.width = displayWidth;
-                testCanvas.height = displayHeight;
-                testCtx.clearRect(0, 0, testCanvas.width, testCanvas.height);
-                testCtx.drawImage(resultImg, 0, 0, displayWidth, displayHeight);
+                const testCanvas = AppState.getTestCanvas();
+                const testCtx = AppState.getTestCtx();
+                if (testCanvas && testCtx) {
+                    testCanvas.width = displayWidth;
+                    testCanvas.height = displayHeight;
+                    testCtx.clearRect(0, 0, testCanvas.width, testCanvas.height);
+                    testCtx.drawImage(resultImg, 0, 0, displayWidth, displayHeight);
+                }
                 
                 if (spinner) spinner.style.display = 'none';
                 
@@ -2004,20 +1350,32 @@ async function runTestPrediction(imagePath) {
             };
             
             resultImg.onerror = () => {
-                console.error('Failed to load prediction result');
+                if (window.logger) {
+                    window.logger.error('Failed to load prediction result');
+                } else {
+                    console.error('Failed to load prediction result');
+                }
                 if (spinner) spinner.style.display = 'none';
             };
         } else {
             throw new Error('No result path returned.');
         }
     } catch (e) {
-        console.error('Prediction error:', e);
+        const message = window.ErrorHandler ? 
+            window.ErrorHandler.handleError(e, 'Running prediction') : 
+            e.message;
+        if (window.logger) {
+            window.logger.error('Prediction error', e);
+        } else {
+            console.error('Prediction error:', e);
+        }
         if (spinner) spinner.style.display = 'none';
         if (logsDiv) {
-            logsDiv.innerHTML = `Error: ${e.message}`;
+            logsDiv.innerHTML = `Error: ${message}`;
             logsDiv.style.display = 'block';
             logsDiv.className = 'text-danger';
         }
+        showMessage(message, 'danger');
     }
 }
 
@@ -2029,6 +1387,9 @@ window.selectModelFile = async function() {
         const modelPathInput = document.getElementById('test-model-path');
         if (modelPathInput) {
             modelPathInput.value = filePath;
+            const testCurrentImageIndex = AppState.getTestCurrentImageIndex();
+            const testImages = AppState.getTestImages();
+            const testDatasetPath = AppState.getTestDatasetPath();
             if (testCurrentImageIndex >= 0 && testImages.length > 0) {
                 const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
                 let imagePath;
@@ -2054,6 +1415,9 @@ window.useBaseModel = async function() {
         if (modelPathInput) {
             modelPathInput.value = basePath;
             showMessage('msg-base-model-selected', 'info');
+            const testCurrentImageIndex = AppState.getTestCurrentImageIndex();
+            const testImages = AppState.getTestImages();
+            const testDatasetPath = AppState.getTestDatasetPath();
             if (testCurrentImageIndex >= 0 && testImages.length > 0) {
                 const hasImagesSubdir = await ipcRenderer.invoke('file-exists', path.join(testDatasetPath, 'images'));
                 let imagePath;
@@ -2082,17 +1446,19 @@ function setupAdminModeToggle() {
     
     logoHeader.addEventListener('click', () => {
         const now = Date.now();
-        logoClickTimes.push(now);
+        AppState.addLogoClick(now);
         
         // Keep only clicks within the timeout window
-        logoClickTimes = logoClickTimes.filter(time => now - time < LOGO_CLICK_TIMEOUT);
+        const logoClickTimes = AppState.getLogoClickTimes();
+        const filtered = logoClickTimes.filter(time => now - time < AppState.getLogoClickTimeout());
+        AppState.setLogoClickTimes(filtered);
         
         // If we have 3 clicks within the timeout, show admin checkbox
-        if (logoClickTimes.length >= 3) {
+        if (filtered.length >= 3) {
             const adminContainer = document.getElementById('admin-check-container');
             if (adminContainer) {
                 adminContainer.style.display = 'block';
-                logoClickTimes = []; // Reset
+                AppState.clearLogoClickTimes(); // Reset
             }
         }
     });
@@ -2104,17 +1470,18 @@ function setupAdminModeToggle() {
  * @param {boolean} enabled - Whether to enable admin mode.
  */
 function toggleAdminMode(enabled) {
-    adminModeEnabled = enabled;
+    AppState.setAdminModeEnabled(enabled);
     localStorage.setItem('yolo_admin_mode_enabled', enabled ? 'true' : 'false');
     
     // Update three-step system UI if it's enabled
-    if (threeStepSystemEnabled) {
-        updateThreeStepSystemUI();
+    if (ThreeStep.getThreeStepSystemEnabled()) {
+        ThreeStep.updateThreeStepSystemUI();
     }
 }
 
 function loadAdminModeState() {
-    adminModeEnabled = localStorage.getItem('yolo_admin_mode_enabled') === 'true';
+    const adminModeEnabled = localStorage.getItem('yolo_admin_mode_enabled') === 'true';
+    AppState.setAdminModeEnabled(adminModeEnabled);
     
     // Update checkbox
     const checkbox = document.getElementById('admin-check');
@@ -2132,469 +1499,4 @@ function loadAdminModeState() {
     
     // Note: updateThreeStepSystemUI() will be called after loadThreeStepSystemState()
     // to ensure both states are loaded before updating UI
-}
-
-// Three-Step System Functions
-
-/**
- * Toggles the three-step system on/off.
- * @param {boolean} enabled - Whether to enable the three-step system.
- */
-function toggleThreeStepSystem(enabled) {
-    threeStepSystemEnabled = enabled;
-    localStorage.setItem('yolo_three_step_enabled', enabled ? 'true' : 'false');
-    
-    // Update UI based on state
-    updateThreeStepSystemUI();
-}
-
-function updateThreeStepSystemUI() {
-    // Update download page
-    const limitInput = document.getElementById('image-limit');
-    if (limitInput) {
-        if (threeStepSystemEnabled) {
-            // 10 if admin mode, otherwise 1000
-            limitInput.value = adminModeEnabled ? 10 : 1000;
-            limitInput.disabled = true;
-            limitInput.style.opacity = '0.6';
-        } else {
-            limitInput.disabled = false;
-            limitInput.style.opacity = '1';
-        }
-    }
-    
-    // Update train page - unlock fields if 3-step system is disabled
-    if (!threeStepSystemEnabled) {
-        const datasetPathInput = document.getElementById('train-dataset-path');
-        const selectBtn = document.getElementById('btn-select-train-dataset');
-        const batchSizeInput = document.getElementById('batch-size');
-        const imageSizeInput = document.getElementById('image-size');
-        
-        if (datasetPathInput) {
-            datasetPathInput.readOnly = false;
-            datasetPathInput.value = '';
-        }
-        if (selectBtn) {
-            selectBtn.disabled = false;
-        }
-        if (batchSizeInput) {
-            batchSizeInput.disabled = false;
-        }
-        if (imageSizeInput) {
-            imageSizeInput.disabled = false;
-        }
-    }
-}
-
-/**
- * Gets the current three-step system stage.
- * @returns {number} Current stage (1, 1.5, 2, 2.5, or 3).
- */
-function getThreeStepStage() {
-    const stageStr = localStorage.getItem('yolo_three_step_stage') || '1';
-    // Use parseFloat to handle decimal stages (1.5, 2.5, 3.5)
-    const stage = parseFloat(stageStr);
-    return isNaN(stage) ? 1 : stage;
-}
-
-/**
- * Sets the three-step system stage.
- * @param {number} stage - Stage number (1, 1.5, 2, 2.5, or 3).
- */
-function setThreeStepStage(stage) {
-    threeStepStage = stage;
-    localStorage.setItem('yolo_three_step_stage', stage.toString());
-    console.log('Three-step stage set to:', stage, '(stored as:', stage.toString(), ')');
-}
-
-function getThreeStepClassName() {
-    return localStorage.getItem('yolo_three_step_class_name') || '';
-}
-
-/**
- * Sets the class name for the three-step system.
- * @param {string} className - Class name.
- */
-function setThreeStepClassName(className) {
-    threeStepClassName = className;
-    localStorage.setItem('yolo_three_step_class_name', className);
-}
-
-function getThreeStepBasePath() {
-    return localStorage.getItem('yolo_three_step_base_path') || '';
-}
-
-/**
- * Sets the base path for the three-step system dataset.
- * @param {string} basePath - Base path to the class folder.
- */
-function setThreeStepBasePath(basePath) {
-    threeStepBasePath = basePath;
-    localStorage.setItem('yolo_three_step_base_path', basePath);
-}
-
-// Load three-step system state on init
-async function loadThreeStepSystemState() {
-    threeStepSystemEnabled = localStorage.getItem('yolo_three_step_enabled') === 'true';
-    threeStepStage = getThreeStepStage();
-    threeStepClassName = getThreeStepClassName();
-    threeStepBasePath = getThreeStepBasePath();
-    
-    // Update checkbox
-    const checkbox = document.getElementById('three-step-system');
-    if (checkbox) {
-        checkbox.checked = threeStepSystemEnabled;
-    }
-    
-    updateThreeStepSystemUI();
-    
-    // If three-step system is enabled and we have state, restore the workflow
-    if (threeStepSystemEnabled && threeStepBasePath && threeStepClassName) {
-        console.log('Restoring three-step system state:', {
-            stage: threeStepStage,
-            className: threeStepClassName,
-            basePath: threeStepBasePath
-        });
-        
-        // Restore to appropriate page based on stage
-        // Stages 1, 2, 3 = annotation pages
-        // Stages 1.5, 2.5, 3.5 = training pages
-        const stageNum = parseFloat(threeStepStage);
-        if (stageNum === 1 || stageNum === 2 || stageNum === 3) {
-            // Annotation stage - go to annotate page
-            showPage('annotate');
-            // Wait for page to be ready, then setup
-            setTimeout(async () => {
-                await setupThreeStepAnnotation();
-            }, 300);
-        } else if (stageNum === 1.5 || stageNum === 2.5 || stageNum === 3.5) {
-            // Training stage - go to train page
-            showPage('train');
-            // Wait for page to be ready, then setup
-            setTimeout(async () => {
-                await setupThreeStepTraining();
-            }, 300);
-        }
-    } else if (threeStepSystemEnabled && threeStepBasePath) {
-        // If on annotate page and three-step is enabled, setup
-        const annotatePage = document.getElementById('page-annotate');
-        if (annotatePage && annotatePage.classList.contains('active')) {
-            await setupThreeStepAnnotation();
-        }
-    }
-}
-
-/**
- * Sets up the annotation page for three-step system.
- * Loads the appropriate folder based on current stage (15, 35, or 50).
- */
-async function setupThreeStepAnnotation() {
-    if (!threeStepSystemEnabled) {
-        console.log('Three-step system not enabled');
-        return;
-    }
-    
-    // Reload state from localStorage
-    threeStepBasePath = getThreeStepBasePath();
-    threeStepClassName = getThreeStepClassName();
-    
-    if (!threeStepBasePath || !threeStepClassName) {
-        console.error('Three-step system state missing:', {
-            basePath: threeStepBasePath,
-            className: threeStepClassName
-        });
-        showMessage('msg-three-step-state-missing', 'warning');
-        return;
-    }
-    
-    console.log('Setting up three-step annotation:', {
-        basePath: threeStepBasePath,
-        className: threeStepClassName,
-        stage: getThreeStepStage()
-    });
-    
-    const stage = getThreeStepStage();
-    const folderName = `${threeStepClassName}_${stage === 1 ? '15' : stage === 2 ? '35' : '50'}`;
-    const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
-    
-    console.log('Loading dataset from:', stagePath);
-    
-    // Check if folder exists
-    const folderExists = await ipcRenderer.invoke('file-exists', stagePath);
-    if (!folderExists) {
-        console.error('Stage folder does not exist:', stagePath);
-        showMessage(`msg-folder-not-found:${folderName}`, 'danger');
-        return;
-    }
-    
-    // Block folder selection button
-    const loadDatasetBtn = document.getElementById('btn-load-dataset');
-    if (loadDatasetBtn) {
-        loadDatasetBtn.disabled = true;
-        loadDatasetBtn.style.opacity = '0.6';
-    }
-    
-    // Auto-load dataset (without notification on startup)
-    try {
-        await loadDataset(stagePath, false);
-    } catch (error) {
-        console.error('Error loading dataset:', error);
-        showMessage(`msg-load-error:${error.message}`, 'danger');
-    }
-    
-    // Block class selection
-    const classSelect = document.getElementById('annotation-class-select');
-    if (classSelect) {
-        classSelect.disabled = true;
-        classSelect.style.opacity = '0.6';
-        if (Classes.getClasses().includes(threeStepClassName)) {
-            Classes.setSelectedClass(threeStepClassName);
-            Classes.renderClasses();
-        }
-    }
-    
-    // Set confidence to 10%
-    const confInput = document.getElementById('auto-label-conf');
-    if (confInput) {
-        confInput.value = '0.10';
-        confInput.disabled = true;
-        confInput.style.opacity = '0.6';
-    }
-    
-    // Auto mode based on stage
-    const autoBtn = document.getElementById('btn-auto-label');
-    if (autoBtn) {
-        if (stage === 1) {
-            // Stage 1: Auto off
-            autoBtn.classList.remove('active', 'btn-warning');
-            autoBtn.classList.add('btn-outline-warning');
-        } else {
-            // Stage 2 and 3: Auto on
-            autoBtn.classList.add('active', 'btn-warning');
-            autoBtn.classList.remove('btn-outline-warning');
-        }
-    }
-}
-
-/**
- * Checks if all images in the current three-step stage are annotated.
- * @returns {Promise<boolean>} True if all images are annotated, false otherwise.
- */
-async function checkThreeStepAnnotationComplete() {
-    if (!threeStepSystemEnabled || !threeStepBasePath) return false;
-    
-    const stage = getThreeStepStage();
-    const folderName = `${threeStepClassName}_${stage === 1 ? '15' : stage === 2 ? '35' : '50'}`;
-    const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
-    
-    // Check if all images in current stage are annotated
-    // This would require checking annotation files
-    // For now, we'll use a simpler approach: check on "Finish & Train" button click
-    return true;
-}
-
-/**
- * Advances to the next three-step system stage.
- * Handles transitions: Stage 1 → Training 1.5 → Stage 2 → Training 2.5 → Stage 3 → Finalize.
- */
-async function proceedToNextThreeStepStage() {
-    if (!threeStepSystemEnabled) return;
-    
-    const currentStage = getThreeStepStage();
-    
-    console.log('Proceeding to next three-step stage. Current stage:', currentStage);
-    
-    if (currentStage === 1) {
-        // Stage 1 complete, go to training
-        console.log('Stage 1 complete, moving to training (stage 1.5) - should use folder 15');
-        setThreeStepStage(1.5); // Training stage 1 - should use folder 15
-        showPage('train');
-        // Wait a bit for page to be ready
-        setTimeout(() => {
-            setupThreeStepTraining();
-        }, 300);
-    } else if (currentStage === 1.5) {
-        // Training stage 1 complete, go to stage 2 annotation
-        console.log('Training stage 1.5 complete, moving to annotation stage 2');
-        setThreeStepStage(2);
-        showPage('annotate');
-        setTimeout(() => {
-            setupThreeStepAnnotation();
-        }, 300);
-    } else if (currentStage === 2) {
-        // Stage 2 complete, go to training
-        console.log('Stage 2 complete, moving to training (stage 2.5) - should use folder 35');
-        setThreeStepStage(2.5); // Training stage 2 - should use folder 35
-        showPage('train');
-        setTimeout(() => {
-            setupThreeStepTraining();
-        }, 300);
-    } else if (currentStage === 2.5) {
-        // Training stage 2 complete, go to stage 3 annotation
-        console.log('Training stage 2.5 complete, moving to annotation stage 3');
-        setThreeStepStage(3);
-        showPage('annotate');
-        setTimeout(() => {
-            setupThreeStepAnnotation();
-        }, 300);
-    } else if (currentStage === 3) {
-        // Stage 3 complete, finalize
-        console.log('Stage 3 complete, finalizing');
-        await finalizeThreeStepSystem();
-    }
-}
-
-/**
- * Sets up the training page for three-step system.
- * Locks dataset path and training parameters based on current stage.
- */
-async function setupThreeStepTraining() {
-    if (!threeStepSystemEnabled) {
-        // If 3-step system is disabled, unlock all fields
-        const datasetPathInput = document.getElementById('train-dataset-path');
-        const selectBtn = document.getElementById('btn-select-train-dataset');
-        const batchSizeInput = document.getElementById('batch-size');
-        const imageSizeInput = document.getElementById('img-size');
-        
-        if (datasetPathInput) {
-            datasetPathInput.readOnly = false;
-            datasetPathInput.disabled = false;
-            datasetPathInput.style.opacity = '1';
-        }
-        if (selectBtn) {
-            selectBtn.disabled = false;
-            selectBtn.style.opacity = '1';
-        }
-        if (batchSizeInput) {
-            batchSizeInput.disabled = false;
-            batchSizeInput.style.opacity = '1';
-        }
-        if (imageSizeInput) {
-            imageSizeInput.disabled = false;
-            imageSizeInput.style.opacity = '1';
-        }
-        return;
-    }
-    
-    // Reload state from localStorage to ensure we have latest values
-    threeStepBasePath = getThreeStepBasePath();
-    threeStepClassName = getThreeStepClassName();
-    
-    const stage = getThreeStepStage();
-    const isFinalTraining = stage === 3.5;
-    
-    console.log('Setting up three-step training:', {
-        stage,
-        stageType: typeof stage,
-        stageValue: stage,
-        basePath: threeStepBasePath,
-        className: threeStepClassName,
-        isFinalTraining
-    });
-    
-    // Block dataset path selection
-    const datasetPathInput = document.getElementById('train-dataset-path');
-    const selectBtn = document.getElementById('btn-select-train-dataset');
-    
-    if (datasetPathInput) {
-        if (isFinalTraining) {
-            // Final training: use CLASSNAME_100 folder
-            const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
-            datasetPathInput.value = folder100;
-            console.log('Final training path:', folder100);
-        } else {
-            // Stage 1.5 or 2.5: use current stage folder
-            // Stage 1.5 = training after stage 1 (15%) -> use folder 15
-            // Stage 2.5 = training after stage 2 (35%) -> use folder 35
-            // IMPORTANT: stage is stored as string in localStorage, so we need to compare properly
-            const stageNum = (stage === 1.5 || stage === '1.5') ? 1 : 2;
-            const folderName = `${threeStepClassName}_${stageNum === 1 ? '15' : '35'}`;
-            const stagePath = await ipcRenderer.invoke('join-path', [threeStepBasePath, folderName]);
-            datasetPathInput.value = stagePath;
-            console.log('Training path calculation:', {
-                stage,
-                stageNum,
-                folderName,
-                stagePath,
-                basePath: threeStepBasePath
-            });
-        }
-        datasetPathInput.disabled = true;
-        datasetPathInput.style.opacity = '0.6';
-    }
-    
-    if (selectBtn) {
-        selectBtn.disabled = true;
-        selectBtn.style.opacity = '0.6';
-    }
-    
-    // Block batch size and image size
-    const batchInput = document.getElementById('batch-size');
-    const imgSizeInput = document.getElementById('img-size');
-    
-    if (batchInput) {
-        batchInput.value = '16';
-        batchInput.disabled = true;
-        batchInput.style.opacity = '0.6';
-    }
-    
-    if (imgSizeInput) {
-        imgSizeInput.value = '640';
-        imgSizeInput.disabled = true;
-        imgSizeInput.style.opacity = '0.6';
-    }
-    
-    const epochsInput = document.getElementById('epochs');
-    if (epochsInput) {
-        if (isFinalTraining) {
-            epochsInput.value = '100';
-            epochsInput.disabled = true;
-            epochsInput.style.opacity = '0.6';
-        } else {
-            epochsInput.min = '1';
-            epochsInput.max = '100';
-        }
-    }
-}
-
-/**
- * Handles the "Finish Annotation" button click in three-step system.
- * Checks if annotation is complete and proceeds to the next stage.
- */
-function handleFinishAnnotate() {
-    if (threeStepSystemEnabled) {
-        // Check if all images are annotated
-        proceedToNextThreeStepStage();
-    } else {
-        // Normal flow
-        showPage('train');
-    }
-}
-
-/**
- * Finalizes the three-step system by merging all annotations.
- * Combines images and labels from stages 15, 35, and 50 into a single dataset.
- * Then trains the final model on the complete dataset.
- */
-async function finalizeThreeStepSystem() {
-    // Collect all annotations from 3 folders into CLASSNAME_100
-    const folder100 = await ipcRenderer.invoke('join-path', [threeStepBasePath, `${threeStepClassName}_100`]);
-    
-    const result = await ipcRenderer.invoke('merge-three-step-annotations', {
-        basePath: threeStepBasePath,
-        className: threeStepClassName,
-        outputFolder: folder100
-    });
-    
-    if (result.success) {
-        // Start final training on all 1000 images, 100 epochs
-        setThreeStepStage(3.5);
-        showPage('train');
-        setupThreeStepTraining();
-        
-        // Auto-start training
-        setTimeout(() => {
-            startTraining();
-        }, 500);
-    }
 }

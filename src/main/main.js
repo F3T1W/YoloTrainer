@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { logger } = require('./utils/logger');
 
 // Import handler modules
 const { registerDatasetHandlers } = require('./handlers/dataset');
@@ -39,22 +40,19 @@ try {
     
     // Verify publish config exists
     if (packageJson.build?.publish?.provider === 'github') {
-      console.log(`Auto-updater configured for GitHub: ${packageJson.build.publish.owner}/${packageJson.build.publish.repo}`);
+      logger.info(`Auto-updater configured for GitHub: ${packageJson.build.publish.owner}/${packageJson.build.publish.repo}`);
     } else {
-      console.warn('GitHub publish config not found in package.json, auto-updater may not work correctly');
+      logger.warn('GitHub publish config not found in package.json, auto-updater may not work correctly');
     }
   }
   
-  console.log('Auto-updater enabled');
+  logger.info('Auto-updater enabled');
 } catch (e) {
-  console.log('electron-updater not available, update functionality disabled:', e.message);
+  logger.warn('electron-updater not available, update functionality disabled', e.message);
 }
 
 let mainWindow;
 
-// Update check interval (check every 6 hours)
-const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
-let updateCheckTimer = null;
 
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -107,9 +105,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (updateCheckTimer) {
-    clearInterval(updateCheckTimer);
-  }
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -125,17 +120,17 @@ function checkForUpdates() {
   }
   
   autoUpdater.checkForUpdates().catch(err => {
-    console.error('Error checking for updates:', err);
+    logger.error('Error checking for updates', err);
   });
 }
 
 if (updaterAvailable && autoUpdater) {
   autoUpdater.on('checking-for-update', () => {
-    console.log('Checking for updates...');
+    logger.info('Checking for updates...');
   });
 
   autoUpdater.on('update-available', (info) => {
-    console.log('Update available:', info.version);
+    logger.info('Update available', { version: info.version });
     if (mainWindow) {
       mainWindow.webContents.send('update-available', {
         version: info.version,
@@ -146,15 +141,15 @@ if (updaterAvailable && autoUpdater) {
   });
 
   autoUpdater.on('update-not-available', () => {
-    console.log('Update not available');
+    logger.debug('Update not available');
   });
 
   autoUpdater.on('error', (err) => {
-    console.error('Error in auto-updater:', err);
+    logger.error('Error in auto-updater', err);
     
     // Handle code signature errors on macOS for unsigned apps
     if (process.platform === 'darwin' && err.message && err.message.includes('code signature')) {
-      console.warn('Code signature validation failed (expected for unsigned apps)');
+      logger.warn('Code signature validation failed (expected for unsigned apps)');
       // For unsigned apps, we'll handle installation manually
       if (mainWindow) {
         mainWindow.webContents.send('update-error', 'Signature validation failed. Please download and install the update manually from GitHub Releases.');
@@ -177,8 +172,7 @@ if (updaterAvailable && autoUpdater) {
   });
 
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('Update downloaded:', info.version);
-    console.log('Update info:', JSON.stringify(info, null, 2));
+    logger.info('Update downloaded', { version: info.version, info: info });
     
     if (mainWindow) {
       mainWindow.webContents.send('update-downloaded', {

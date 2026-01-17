@@ -58,19 +58,59 @@ pip install -r python/requirements.txt
 ```
 yolo_trainer/
 ├── src/
-│   ├── main/
-│   │   └── main.js          # Electron main process
-│   └── renderer/
-│       ├── index.html       # UI interface
-│       └── annotation.js    # Annotation logic
+│   ├── main/                        # Electron main process
+│   │   ├── main.js                  # Main process entry point
+│   │   ├── handlers/                # IPC handlers (modular)
+│   │   │   ├── annotation.js        # Annotation-related IPC
+│   │   │   ├── dataset.js           # Dataset operations
+│   │   │   ├── download.js          # Reddit download control
+│   │   │   ├── files.js             # File system operations
+│   │   │   ├── prediction.js        # Model prediction
+│   │   │   ├── python.js            # Python environment wrapper
+│   │   │   ├── three-step.js        # Three-step system IPC
+│   │   │   ├── training.js          # Model training IPC
+│   │   │   └── updates.js           # Auto-update handlers
+│   │   └── utils/
+│   │       └── python-env.js        # Python environment management
+│   └── renderer/                    # UI renderer process
+│       ├── index.html               # Main UI interface
+│       ├── annotation.js            # Main annotation logic (orchestrator)
+│       ├── modules/                 # Feature modules
+│       │   ├── annotation-core.js   # Canvas & bounding box logic
+│       │   ├── classes.js           # Class management
+│       │   ├── download.js         # Reddit download UI logic
+│       │   ├── navigation.js       # Page navigation
+│       │   ├── three-step.js       # Three-step system logic
+│       │   └── training.js         # Training UI logic
+│       ├── state/
+│       │   └── app-state.js        # Centralized state management
+│       └── utils/                   # Utility modules
+│           ├── notifications.js    # Toast notifications
+│           ├── stats.js             # Statistics calculation
+│           └── storage.js          # localStorage wrapper
 ├── python/
-│   ├── reddit_downloader.py # Reddit download script
-│   ├── yolo_trainer.py      # YOLO training script
-│   └── requirements.txt     # Python dependencies
-├── datasets/                 # Datasets
-├── models/                   # Trained models
+│   ├── reddit_downloader.py         # Reddit image download script
+│   ├── yolo_trainer.py              # YOLOv8 training script
+│   └── requirements.txt             # Python dependencies
+├── datasets/                         # User datasets (created at runtime)
+├── models_history/                   # Trained models history
 └── package.json
 ```
+
+### Architecture Overview
+
+The application follows a modular architecture:
+
+- **Main Process** (`src/main/`): Handles IPC communication, file operations, and Python script execution
+  - **Handlers**: Organized IPC handlers for different features
+  - **Utils**: Shared utilities (Python environment management)
+
+- **Renderer Process** (`src/renderer/`): Manages UI and user interactions
+  - **Modules**: Feature-specific modules (classes, download, training, etc.)
+  - **State**: Centralized application state management
+  - **Utils**: Reusable utility functions (notifications, storage, stats)
+
+- **Python Scripts** (`python/`): Backend processing (download, training)
 
 ## macOS Installation
 

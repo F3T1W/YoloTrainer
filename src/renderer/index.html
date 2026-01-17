@@ -201,6 +201,73 @@
             background-color: transparent !important; 
         }
 
+        /* Placeholder text color in dark theme - default white */
+        .form-control::placeholder,
+        .form-control::-webkit-input-placeholder,
+        .form-control::-moz-placeholder,
+        .form-control:-ms-input-placeholder {
+            color: #ffffff !important;
+            opacity: 0.7;
+        }
+
+        /* Specific fields with black placeholders in dark theme - more specific selectors */
+        input.form-control.text-white#subreddit-input::placeholder,
+        input.form-control.text-white#subreddit-input::-webkit-input-placeholder,
+        input.form-control.text-white#subreddit-input::-moz-placeholder,
+        input.form-control.text-white#subreddit-input:-ms-input-placeholder,
+        input.form-control.text-white#class-name-input::placeholder,
+        input.form-control.text-white#class-name-input::-webkit-input-placeholder,
+        input.form-control.text-white#class-name-input::-moz-placeholder,
+        input.form-control.text-white#class-name-input:-ms-input-placeholder,
+        input.form-control.text-white#image-limit::placeholder,
+        input.form-control.text-white#image-limit::-webkit-input-placeholder,
+        input.form-control.text-white#image-limit::-moz-placeholder,
+        input.form-control.text-white#image-limit:-ms-input-placeholder,
+        input.form-control.text-white#download-path::placeholder,
+        input.form-control.text-white#download-path::-webkit-input-placeholder,
+        input.form-control.text-white#download-path::-moz-placeholder,
+        input.form-control.text-white#download-path:-ms-input-placeholder,
+        input.form-control#train-dataset-path::placeholder,
+        input.form-control#train-dataset-path::-webkit-input-placeholder,
+        input.form-control#train-dataset-path::-moz-placeholder,
+        input.form-control#train-dataset-path:-ms-input-placeholder,
+        input.form-control#batch-size::placeholder,
+        input.form-control#batch-size::-webkit-input-placeholder,
+        input.form-control#batch-size::-moz-placeholder,
+        input.form-control#batch-size:-ms-input-placeholder,
+        input.form-control#img-size::placeholder,
+        input.form-control#img-size::-webkit-input-placeholder,
+        input.form-control#img-size::-moz-placeholder,
+        input.form-control#img-size:-ms-input-placeholder,
+        input.form-control#epochs::placeholder,
+        input.form-control#epochs::-webkit-input-placeholder,
+        input.form-control#epochs::-moz-placeholder,
+        input.form-control#epochs:-ms-input-placeholder {
+            color: #000000 !important;
+            opacity: 1 !important;
+        }
+
+        /* Specific styling for test model path placeholder - more specific selectors */
+        #test-model-path::placeholder,
+        #test-model-path::-webkit-input-placeholder,
+        #test-model-path::-moz-placeholder,
+        #test-model-path:-ms-input-placeholder,
+        .form-control.bg-dark.text-white::placeholder,
+        .form-control.bg-dark.text-white::-webkit-input-placeholder,
+        .form-control.bg-dark.text-white::-moz-placeholder,
+        .form-control.bg-dark.text-white:-ms-input-placeholder,
+        #test-model-path.bg-dark.text-white::placeholder,
+        #test-model-path.bg-dark.text-white::-webkit-input-placeholder,
+        #test-model-path.bg-dark.text-white::-moz-placeholder,
+        #test-model-path.bg-dark.text-white:-ms-input-placeholder,
+        input.form-control.bg-dark.text-white#test-model-path::placeholder,
+        input.form-control.bg-dark.text-white#test-model-path::-webkit-input-placeholder,
+        input.form-control.bg-dark.text-white#test-model-path::-moz-placeholder,
+        input.form-control.bg-dark.text-white#test-model-path:-ms-input-placeholder {
+            color: #ffffff !important;
+            opacity: 1 !important;
+        }
+
         /* Fix for empty space at top of form-select in form-floating */
         .form-floating > .form-select {
             padding-top: 0.625rem !important;
@@ -315,7 +382,27 @@
             border-radius: 6px;
             height: 100%;
             overflow-y: auto;
-            border: 1px solid #333;
+        }
+
+        /* Override terminal log colors for better visibility in dark theme */
+        body:not([data-theme="light"]) .terminal-log {
+            color: #0f0 !important;
+        }
+
+        body:not([data-theme="light"]) .terminal-log .text-success {
+            color: #0f0 !important;
+        }
+
+        body:not([data-theme="light"]) .terminal-log .text-warning {
+            color: #ffc107 !important;
+        }
+
+        body:not([data-theme="light"]) .terminal-log .text-danger {
+            color: #dc3545 !important;
+        }
+
+        body:not([data-theme="light"]) .terminal-log .text-info {
+            color: #0dcaf0 !important;
         }
 
         /* Theme Cards */
@@ -524,16 +611,16 @@
             background-color: #e9ecef;
         }
 
-        body[data-theme="light"] #placeholder-text {
-            color: #fff !important;
-        }
-
         /* Make annotation placeholder more visible */
         #placeholder-text {
             color: #fff !important;
             font-size: 1.25rem !important;
             font-weight: 500 !important;
             opacity: 1 !important;
+        }
+
+        body[data-theme="light"] #placeholder-text {
+            color: #ffffff !important;
         }
 
         body[data-theme="light"] .text-muted {
@@ -691,12 +778,84 @@
         }
 
         body[data-theme="light"] #test-result-placeholder {
+            color: #333 !important;
+        }
+
+        /* Placeholder text elements - visible in both themes */
+        .placeholder-text-element {
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] .placeholder-text-element {
+            color: #fff !important;
+        }
+
+        /* Test placeholder text visibility */
+        #test-placeholder-text {
+            color: #fff !important;
+        }
+
+        body[data-theme="light"] #test-placeholder-text {
             color: #fff !important;
         }
 
         body[data-theme="light"] .input-group-text.bg-dark {
             background-color: #343a40 !important;
             color: #fff !important;
+        }
+
+        /* Settings info text - visible in both themes */
+        .settings-info-text {
+            color: #e0e0e0 !important;
+        }
+
+        body[data-theme="light"] .settings-info-text {
+            color: #fff !important;
+        }
+
+        /* Reset stats button - visible in both themes */
+        .reset-stats-btn {
+            color: #ffffff !important;
+        }
+
+        /* More specific selector to override Bootstrap .btn-link styles */
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn,
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn:hover,
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn:focus,
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn:active,
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn:visited {
+            color: #000000 !important;
+        }
+
+        /* Ensure icon inside reset button is also black in light theme */
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn i,
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn:hover i,
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn:focus i,
+        body[data-theme="light"] .btn.btn-link.reset-stats-btn:active i {
+            color: #000000 !important;
+        }
+
+        /* Training log text visibility - ensure text is visible in both themes */
+        /* Note: Base terminal-log styles are defined above, these are overrides for theme-specific visibility */
+        body[data-theme="light"] .terminal-log {
+            color: #333 !important;
+        }
+
+        body[data-theme="light"] .terminal-log .text-success {
+            color: #198754 !important;
+        }
+
+        /* Form controls visibility in dark theme */
+        body[data-theme="dark"] .form-control.text-white {
+            color: #fff !important;
+        }
+
+        body[data-theme="dark"] .form-control:not(.text-white):not([readonly]) {
+            color: #e0e0e0 !important;
+        }
+
+        body[data-theme="dark"] .form-control[readonly] {
+            color: #b0b0b0 !important;
         }
 
         body[data-theme="light"] .form-control.bg-dark,
@@ -709,8 +868,88 @@
             border-color: #6c757d !important;
         }
 
+        /* Ensure placeholder is white in dark theme (after light theme styles) */
+        #test-model-path::placeholder,
+        #test-model-path::-webkit-input-placeholder,
+        #test-model-path::-moz-placeholder,
+        #test-model-path:-ms-input-placeholder {
+            color: #ffffff !important;
+            opacity: 1 !important;
+        }
+
+        /* Override for bg-dark text-white inputs in dark theme */
+        .form-control.bg-dark.text-white::placeholder,
+        .form-control.bg-dark.text-white::-webkit-input-placeholder,
+        .form-control.bg-dark.text-white::-moz-placeholder,
+        .form-control.bg-dark.text-white:-ms-input-placeholder {
+            color: #ffffff !important;
+            opacity: 1 !important;
+        }
+
+        /* Placeholder text color for specific fields in light theme - should be black */
+        body[data-theme="light"] #download-path::placeholder,
+        body[data-theme="light"] #download-path::-webkit-input-placeholder,
+        body[data-theme="light"] #download-path::-moz-placeholder,
+        body[data-theme="light"] #download-path:-ms-input-placeholder,
+        body[data-theme="light"] #image-limit::placeholder,
+        body[data-theme="light"] #image-limit::-webkit-input-placeholder,
+        body[data-theme="light"] #image-limit::-moz-placeholder,
+        body[data-theme="light"] #image-limit:-ms-input-placeholder,
+        body[data-theme="light"] #train-dataset-path::placeholder,
+        body[data-theme="light"] #train-dataset-path::-webkit-input-placeholder,
+        body[data-theme="light"] #train-dataset-path::-moz-placeholder,
+        body[data-theme="light"] #train-dataset-path:-ms-input-placeholder,
+        body[data-theme="light"] #batch-size::placeholder,
+        body[data-theme="light"] #batch-size::-webkit-input-placeholder,
+        body[data-theme="light"] #batch-size::-moz-placeholder,
+        body[data-theme="light"] #batch-size:-ms-input-placeholder,
+        body[data-theme="light"] #img-size::placeholder,
+        body[data-theme="light"] #img-size::-webkit-input-placeholder,
+        body[data-theme="light"] #img-size::-moz-placeholder,
+        body[data-theme="light"] #img-size:-ms-input-placeholder {
+            color: #000000 !important;
+            opacity: 1 !important;
+        }
+
         body[data-theme="light"] .card.bg-dark {
             background-color: #343a40 !important;
+        }
+
+        /* Force black placeholders for specific fields in dark theme - highest priority, placed at end */
+        input#subreddit-input.form-control.text-white::placeholder,
+        input#subreddit-input.form-control.text-white::-webkit-input-placeholder,
+        input#subreddit-input.form-control.text-white::-moz-placeholder,
+        input#subreddit-input.form-control.text-white:-ms-input-placeholder,
+        input#class-name-input.form-control.text-white::placeholder,
+        input#class-name-input.form-control.text-white::-webkit-input-placeholder,
+        input#class-name-input.form-control.text-white::-moz-placeholder,
+        input#class-name-input.form-control.text-white:-ms-input-placeholder,
+        input#image-limit.form-control.text-white::placeholder,
+        input#image-limit.form-control.text-white::-webkit-input-placeholder,
+        input#image-limit.form-control.text-white::-moz-placeholder,
+        input#image-limit.form-control.text-white:-ms-input-placeholder,
+        input#download-path.form-control.text-white::placeholder,
+        input#download-path.form-control.text-white::-webkit-input-placeholder,
+        input#download-path.form-control.text-white::-moz-placeholder,
+        input#download-path.form-control.text-white:-ms-input-placeholder,
+        input#train-dataset-path.form-control::placeholder,
+        input#train-dataset-path.form-control::-webkit-input-placeholder,
+        input#train-dataset-path.form-control::-moz-placeholder,
+        input#train-dataset-path.form-control:-ms-input-placeholder,
+        input#batch-size.form-control::placeholder,
+        input#batch-size.form-control::-webkit-input-placeholder,
+        input#batch-size.form-control::-moz-placeholder,
+        input#batch-size.form-control:-ms-input-placeholder,
+        input#img-size.form-control::placeholder,
+        input#img-size.form-control::-webkit-input-placeholder,
+        input#img-size.form-control::-moz-placeholder,
+        input#img-size.form-control:-ms-input-placeholder,
+        input#epochs.form-control::placeholder,
+        input#epochs.form-control::-webkit-input-placeholder,
+        input#epochs.form-control::-moz-placeholder,
+        input#epochs.form-control:-ms-input-placeholder {
+            color: #000000 !important;
+            opacity: 1 !important;
         }
 
         body[data-theme="light"] .card.bg-dark .text-white {
@@ -864,7 +1103,7 @@
                     <div class="progress" style="height: 6px;">
                         <div id="update-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
                     </div>
-                    <small class="text-white-50" data-i18n="update-downloading">Downloading...</small>
+                    <small class="text-white" data-i18n="update-downloading">Downloading...</small>
                 </div>
                 <div id="update-actions" class="d-flex gap-2">
                     <button class="btn btn-primary btn-sm flex-fill" onclick="downloadUpdate()" data-i18n="update-download">
@@ -920,6 +1159,13 @@
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                                
+                                <!-- Reset Stats Button -->
+                                <div class="text-center mt-3">
+                                    <button id="btn-reset-stats" class="btn btn-link reset-stats-btn" style="font-size: 0.75rem; opacity: 0.5; text-decoration: none; color: #000000 !important;" onclick="resetStats()" title="Reset statistics">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Reset
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1019,7 +1265,7 @@
                                                 <div class="progress bg-dark" style="height: 10px;">
                                                     <div id="download-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 0%"></div>
                                                 </div>
-                                                <div id="download-log" class="small text-muted mt-2 font-monospace" style="max-height: 100px; overflow-y: auto;"></div>
+                                                <div id="download-log" class="small mt-2 font-monospace" style="max-height: 100px; overflow-y: auto;"></div>
                     </div>
                 </div>
 
@@ -1123,7 +1369,7 @@
             <!-- Main Canvas Area (Fills space) -->
             <div id="annotation-container">
                 <canvas id="annotation-canvas"></canvas>
-                <div class="text-white text-center" id="placeholder-text" style="position: absolute; pointer-events: none; font-size: 1.25rem; font-weight: 500; opacity: 1;" data-i18n="annotate-placeholder">
+                <div class="text-center placeholder-text-element" id="placeholder-text" style="position: absolute; pointer-events: none; font-size: 1.25rem; font-weight: 500; opacity: 1;" data-i18n="annotate-placeholder">
                     <i class="bi bi-image fs-1 d-block mb-3"></i>
                     Load a dataset to start annotating
                 </div>
@@ -1245,7 +1491,7 @@
                         </div>
                         <div class="col-md-3">
                             <div class="input-group input-group-sm">
-                                <input type="text" class="form-control bg-dark text-white border-secondary" id="test-model-path" readonly placeholder="Select model..." value="">
+                                <input type="text" class="form-control bg-dark text-white border-secondary" id="test-model-path" readonly data-i18n-placeholder="test-select-model" placeholder="Select model..." value="" style="color: #ffffff !important;">
                                 <button class="btn btn-outline-secondary" type="button" onclick="selectModelFile()" data-i18n="test-select-pt">
                                     <i class="bi bi-file-earmark-code"></i> .pt
                                 </button>
@@ -1271,7 +1517,7 @@
             <!-- Main Canvas Area (Fills space) -->
             <div id="test-container" style="position: relative; flex: 1; min-height: 0; background: #000; border: 1px solid #495057; border-radius: 0.375rem; overflow: hidden;">
                 <canvas id="test-canvas" style="display: block; max-width: 100%; max-height: 100%; margin: auto;"></canvas>
-                <div class="text-white text-center" id="test-placeholder-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; font-size: 1.25rem; font-weight: 500; opacity: 1;" data-i18n="test-placeholder">
+                <div class="text-center placeholder-text-element" id="test-placeholder-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; font-size: 1.25rem; font-weight: 500; opacity: 1;" data-i18n="test-placeholder">
                     <i class="bi bi-image fs-1 d-block mb-3"></i>
                     Load a test folder and select a model to start
                 </div>
@@ -1381,7 +1627,7 @@
                                                     <span class="text-white" data-i18n="settings-current-version">Current Version:</span>
                                                     <span id="current-version" class="badge bg-info">1.0.0</span>
                                                 </div>
-                                                <div class="text-white-50 small mb-2" data-i18n="settings-updates-manual-note">
+                                                <div class="text-white small mb-2 settings-info-text" data-i18n="settings-updates-manual-note">
                                                     Auto-update is disabled. Please download updates manually from GitHub Releases.
                                                 </div>
                                             </div>
@@ -1397,7 +1643,7 @@
                                     <h5 class="text-white mb-3"><i class="bi bi-folder2-open me-2"></i><span data-i18n="settings-models-folder">Models Folder</span></h5>
                                     <div class="card bg-dark border-secondary mb-3">
                                         <div class="card-body">
-                                            <div class="text-white-50 small mb-3" data-i18n="settings-models-folder-desc">
+                                            <div class="text-white small mb-3 settings-info-text" data-i18n="settings-models-folder-desc">
                                                 Open the folder containing all trained model versions.
                                             </div>
                                             <button class="btn btn-primary btn-sm" onclick="openModelsFolder()" data-i18n="settings-open-models-folder">
@@ -1479,7 +1725,14 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="state/app-state.js"></script>
+    <script src="utils/logger.js"></script>
+    <script src="utils/error-handler.js"></script>
     <script src="modules/classes.js"></script>
+    <script src="modules/annotation-core.js"></script>
+    <script src="modules/training.js"></script>
+    <script src="modules/download.js"></script>
+    <script src="modules/three-step.js"></script>
     <script src="annotation.js"></script>
     <script>
         // Update notification functions
@@ -1583,7 +1836,7 @@
             if (statusDiv) {
                 statusDiv.style.display = 'block';
                 statusDiv.textContent = 'Checking for updates...';
-                statusDiv.className = 'text-white-50 small mb-2';
+                statusDiv.className = 'text-white small mb-2';
             }
             
             if (checkBtn) {
@@ -1982,7 +2235,8 @@
                 'msg-enter-class-name': 'Please enter class name for 3-Step System',
                 'msg-three-step-state-missing': 'Three-step system state is missing. Please restart the download.',
                 'msg-folder-not-found': 'Folder not found: {0}',
-                'msg-load-error': 'Error loading dataset: {0}'
+                'msg-load-error': 'Error loading dataset: {0}',
+                'msg-stats-reset': 'Statistics reset'
             },
             ru: {
                 // Sidebar
@@ -2053,6 +2307,7 @@
                 'test-title': 'Тестировать модель',
                 'test-model-path': 'Путь к модели',
                 'test-select-pt': 'Выбрать .pt',
+                'test-select-model': 'Выбрать модель...',
                 'test-base': 'Базовый',
                 'test-image': 'Изображение для теста',
                 'test-select-image': 'Выбрать изображение',
@@ -2125,7 +2380,8 @@
                 'msg-enter-class-name': 'Пожалуйста, введите название класса для системы 3х шагов',
                 'msg-three-step-state-missing': 'Состояние системы 3х шагов отсутствует. Пожалуйста, перезапустите загрузку.',
                 'msg-folder-not-found': 'Папка не найдена: {0}',
-                'msg-load-error': 'Ошибка загрузки набора данных: {0}'
+                'msg-load-error': 'Ошибка загрузки набора данных: {0}',
+                'msg-stats-reset': 'Статистика сброшена'
             },
             ja: {
                 // Sidebar
@@ -2194,6 +2450,7 @@
                 'test-title': 'モデルをテスト',
                 'test-model-path': 'モデルパス',
                 'test-select-pt': '.ptを選択',
+                'test-select-model': 'モデルを選択...',
                 'test-base': 'ベース',
                 'test-image': 'テストする画像',
                 'test-select-image': '画像を選択',
@@ -2334,6 +2591,7 @@
                 'test-title': 'Modelni sinash',
                 'test-model-path': 'Model yo\'li',
                 'test-select-pt': '.pt tanlash',
+                'test-select-model': 'Modelni tanlash...',
                 'test-base': 'Asosiy',
                 'test-image': 'Sinash uchun rasm',
                 'test-select-image': 'Rasmni tanlash',
@@ -2500,7 +2758,58 @@
         }
 
         // Initialize Home
+        // Fix placeholder color for test-model-path input
+        function fixTestModelPathPlaceholder() {
+            const input = document.getElementById('test-model-path');
+            if (input) {
+                const style = document.createElement('style');
+                style.textContent = `
+                    #test-model-path::placeholder { color: #ffffff !important; opacity: 1 !important; }
+                    #test-model-path::-webkit-input-placeholder { color: #ffffff !important; opacity: 1 !important; }
+                    #test-model-path::-moz-placeholder { color: #ffffff !important; opacity: 1 !important; }
+                    #test-model-path:-ms-input-placeholder { color: #ffffff !important; opacity: 1 !important; }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+
+        // Fix placeholder color for specific fields - black in dark theme
+        function fixBlackPlaceholders() {
+            const fields = ['subreddit-input', 'class-name-input', 'image-limit', 'download-path', 
+                           'train-dataset-path', 'batch-size', 'img-size', 'epochs'];
+            const style = document.createElement('style');
+            style.id = 'black-placeholders-style';
+            
+            // Remove existing style if present
+            const existing = document.getElementById('black-placeholders-style');
+            if (existing) {
+                existing.remove();
+            }
+            
+            let css = '';
+            fields.forEach(fieldId => {
+                css += `
+                    input#${fieldId}.form-control::placeholder,
+                    input#${fieldId}.form-control.text-white::placeholder,
+                    input#${fieldId}.form-control::-webkit-input-placeholder,
+                    input#${fieldId}.form-control.text-white::-webkit-input-placeholder,
+                    input#${fieldId}.form-control::-moz-placeholder,
+                    input#${fieldId}.form-control.text-white::-moz-placeholder,
+                    input#${fieldId}.form-control:-ms-input-placeholder,
+                    input#${fieldId}.form-control.text-white:-ms-input-placeholder {
+                        color: #000000 !important;
+                        opacity: 1 !important;
+                    }
+                `;
+            });
+            
+            style.textContent = css;
+            document.head.appendChild(style);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+            fixTestModelPathPlaceholder();
+            fixBlackPlaceholders();
              // Ensure correct page is shown on load
              showPage('home');
              // Load saved settings

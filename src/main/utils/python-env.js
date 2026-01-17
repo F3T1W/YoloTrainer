@@ -15,7 +15,7 @@ function getVenvPath() {
   if (app.isPackaged) {
     return path.join(app.getPath('userData'), 'venv');
   } else {
-    return path.join(__dirname, '../../venv');
+    return path.join(__dirname, '../../../venv');
   }
 }
 
@@ -185,7 +185,7 @@ async function getRequirementsPath() {
         await fs.writeFile(tempRequirementsPath, asarContent);
         logs.push('✓ Copied requirements.txt to user data directory');
       } catch (e) {
-        const altPath = path.join(__dirname, '../../python/requirements.txt');
+        const altPath = path.join(__dirname, '../../../python/requirements.txt');
         if (await fs.pathExists(altPath)) {
           await fs.copy(altPath, tempRequirementsPath);
           logs.push('✓ Copied requirements.txt from alternative path');
@@ -197,7 +197,7 @@ async function getRequirementsPath() {
     }
     return { success: true, path: tempRequirementsPath, logs };
   } else {
-    const devPath = path.join(__dirname, '../../python/requirements.txt');
+    const devPath = path.join(__dirname, '../../../python/requirements.txt');
     return { success: true, path: devPath, logs };
   }
 }

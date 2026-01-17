@@ -1,6 +1,7 @@
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs-extra');
+const { logger } = require('../utils/logger');
 
 /**
  * Registers training-related IPC handlers.
@@ -20,8 +21,6 @@ function registerTrainingHandlers(ipcMain, mainWindow) {
    * @param {string} [params.className] - Class name for model filename.
    * @param {number} [params.learningPercent] - Learning percentage for model filename (15, 35, 50, or 100).
    * @returns {Promise<Object>} Result object with success status and training output.
-   * @returns {boolean} returns.success - Whether training completed successfully.
-   * @returns {string} returns.message - Training output/logs.
    */
   ipcMain.handle('train-model', async (event, { datasetPath, epochs, batchSize, imgSize, classNames, className, learningPercent }) => {
     return new Promise((resolve, reject) => {
@@ -45,7 +44,7 @@ function registerTrainingHandlers(ipcMain, mainWindow) {
           optimizedWorkers = 8;
         }
         
-        console.log(`Apple Silicon detected! Optimized batch size: ${optimizedBatchSize}, workers: ${optimizedWorkers}`);
+        logger.info('Apple Silicon detected', { batchSize: optimizedBatchSize, workers: optimizedWorkers });
       }
       
       const classNamesStr = Array.isArray(classNames) ? classNames.join(',') : '';
@@ -74,39 +73,26 @@ function registerTrainingHandlers(ipcMain, mainWindow) {
       
       pythonProcess.stderr.on('data', (d) => {
         if (mainWindow) mainWindow.webContents.send('training-progress', d.toString());
-        console.error(`Training Info: ${d}`);
+        logger.debug('Training output', d.toString());
       });
 
       pythonProcess.on('close', (code) => {
         if (code === 0) {
           resolve({ success: true, message: output });
         } else {
-          reject(new Error(`Training failed with code ${code}`));
+          const errorMessage = output.includes('CUDA') || output.includes('device')
+            ? 'GPU/CUDA error. Try using CPU mode or check your GPU drivers.'
+            : output.includes('out of memory') || output.includes('OOM')
+            ? 'Out of memory. Try reducing batch size or image size.'
+            : output.includes('FileNotFoundError') || output.includes('not found')
+            ? 'Dataset file not found. Please check the dataset path.'
+            : `Training failed with code ${code}. Check the logs for details.`;
+          reject(new Error(errorMessage));
         }
       });
     });
   });
 
-  /**
-   * Exports a trained model to CodeSlave directory.
-   * @param {Electron.IpcMainInvokeEvent} event - The IPC event.
-   * @param {Object} params - Export parameters.
-   * @param {string} params.modelPath - Path to the model file (.pt).
-   * @param {string} [params.outputPath] - Output path (currently unused, uses CodeSlave path).
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether export succeeded.
-   * @returns {string} [returns.error] - Error message if export failed.
-   */
-  ipcMain.handle('export-model', async (event, { modelPath, outputPath }) => {
-    try {
-      const targetPath = path.join(__dirname, '../../../CodeSlave/python_bridge/custom_models');
-      await fs.ensureDir(targetPath);
-      await fs.copy(modelPath, path.join(targetPath, path.basename(modelPath)));
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  });
 
   /**
    * Gets the path to the base YOLOv8n model file.
@@ -126,7 +112,9 @@ function registerTrainingHandlers(ipcMain, mainWindow) {
       if (await fs.pathExists(modelPath)) {
         return modelPath;
       }
-    } catch(e) {}
+    } catch(e) {
+      logger.debug('Model path check failed', e);
+    }
     return null;
   });
 }

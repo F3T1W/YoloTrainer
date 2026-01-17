@@ -19,9 +19,7 @@ function registerAnnotationHandlers(ipcMain, mainWindow) {
    * @param {number} params.annotations[].width - Normalized width (0-1).
    * @param {number} params.annotations[].height - Normalized height (0-1).
    * @param {string[]} params.classNames - Array of all class names (for class ID mapping).
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether the annotation was saved successfully.
-   * @returns {string} [returns.error] - Error message if save failed.
+   * @returns {Promise<Object>} Result object with success status and optional error message.
    */
   ipcMain.handle('save-annotation', async (event, { imagePath, annotations, classNames }) => {
     try {

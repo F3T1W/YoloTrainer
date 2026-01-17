@@ -15,7 +15,7 @@
     "annotation",
     "reddit"
   ],
-  "author": "",
+  "author": "F3T1W",
   "license": "ISC",
   "devDependencies": {
     "electron": "^39.2.7",

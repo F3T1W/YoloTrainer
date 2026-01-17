@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs-extra');
+const { logger } = require('../utils/logger');
 
 /**
  * Registers three-step system IPC handlers.
@@ -15,20 +16,14 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
    * @param {string} params.basePath - Base path where class folders will be created.
    * @param {string} params.className - Name of the class (used for folder naming).
    * @param {number} params.totalCount - Total number of images to distribute.
-   * @returns {Promise<Object>} Result object with distribution details.
-   * @returns {boolean} returns.success - Whether distribution succeeded.
-   * @returns {string} returns.basePath - Path to the created class folder.
-   * @returns {Object} returns.counts - Distribution counts per folder.
-   * @returns {number} returns.counts.folder15 - Number of images in 15% folder.
-   * @returns {number} returns.counts.folder35 - Number of images in 35% folder.
-   * @returns {number} returns.counts.folder50 - Number of images in 50% folder.
+   * @returns {Promise<Object>} Result object with success, basePath, and counts per folder.
    */
   ipcMain.handle('distribute-three-step-images', async (event, { sourcePath, basePath, className, totalCount }) => {
     try {
       const sourceDir = sourcePath;
       const baseDir = basePath;
       
-      console.log('Distribute-three-step-images called with:', {
+      logger.debug('Distribute-three-step-images called', {
         sourcePath,
         basePath,
         className,
@@ -36,11 +31,11 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
       });
       
       await fs.ensureDir(baseDir);
-      console.log('Base directory ensured:', baseDir);
+      logger.debug('Base directory ensured', { baseDir });
       
       const classFolder = path.join(baseDir, className);
       await fs.ensureDir(classFolder);
-      console.log('Class folder created:', classFolder);
+      logger.debug('Class folder created', { classFolder });
       
       const folder15 = path.join(classFolder, `${className}_15`);
       const folder35 = path.join(classFolder, `${className}_35`);
@@ -53,7 +48,7 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
       await fs.ensureDir(path.join(folder50, 'images'));
       await fs.ensureDir(path.join(folder50, 'labels'));
       
-      console.log('Subfolders created:', {
+      logger.debug('Subfolders created', {
         folder15,
         folder35,
         folder50
@@ -99,7 +94,7 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
         }
       };
     } catch (error) {
-      console.error('Error distributing images:', error);
+      logger.error('Error distributing images', error);
       throw error;
     }
   });
@@ -118,7 +113,7 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
    */
   ipcMain.handle('merge-three-step-annotations', async (event, { basePath, className, outputFolder }) => {
     try {
-      console.log('Merging three-step annotations:', { basePath, className, outputFolder });
+      logger.info('Merging three-step annotations', { basePath, className, outputFolder });
       
       const outputImagesPath = path.join(outputFolder, 'images');
       const outputLabelsPath = path.join(outputFolder, 'labels');
@@ -150,7 +145,7 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
           }
         }
       }
-      console.log(`Merged from folder 15: ${totalImages} images, ${totalLabels} labels`);
+      logger.debug(`Merged from folder 15: ${totalImages} images, ${totalLabels} labels`);
       
       const folder35Images = path.join(folder35, 'images');
       const folder35Labels = path.join(folder35, 'labels');
@@ -170,7 +165,7 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
           }
         }
       }
-      console.log(`Merged from folder 35: ${totalImages} images, ${totalLabels} labels`);
+      logger.debug(`Merged from folder 35: ${totalImages} images, ${totalLabels} labels`);
       
       const folder50Images = path.join(folder50, 'images');
       const folder50Labels = path.join(folder50, 'labels');
@@ -190,12 +185,12 @@ function registerThreeStepHandlers(ipcMain, mainWindow) {
           }
         }
       }
-      console.log(`Merged from folder 50: ${totalImages} images, ${totalLabels} labels`);
+      logger.debug(`Merged from folder 50: ${totalImages} images, ${totalLabels} labels`);
       
-      console.log(`Total merged: ${totalImages} images, ${totalLabels} labels`);
+      logger.info(`Total merged: ${totalImages} images, ${totalLabels} labels`);
       return { success: true, totalImages, totalLabels };
     } catch (error) {
-      console.error('Error merging three-step annotations:', error);
+      logger.error('Error merging three-step annotations', error);
       throw error;
     }
   });

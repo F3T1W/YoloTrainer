@@ -1,5 +1,6 @@
 const path = require('path');
 const { spawn } = require('child_process');
+const { logger } = require('../utils/logger');
 
 // Download process state
 let currentDownloadProcess = null;
@@ -21,11 +22,7 @@ function registerDownloadHandlers(ipcMain, mainWindow) {
    * @param {string} params.class_name - Class name for organizing downloaded images.
    * @param {string} [params.output_dir] - Output directory path. Defaults to datasets/raw.
    * @param {boolean} [params.three_step_mode] - Enable three-step distribution mode.
-   * @returns {Promise<Object>} Result object with success status, message, and downloaded count.
-   * @returns {boolean} returns.success - Whether the download completed successfully.
-   * @returns {string} returns.message - Output message from the download script.
-   * @returns {number} returns.downloaded - Number of images downloaded.
-   * @returns {boolean} [returns.stopped] - Whether the download was stopped by user.
+   * @returns {Promise<Object>} Result object with success, message, downloaded count, and optional stopped flag.
    */
   ipcMain.handle('download-reddit-images', async (event, { subreddit, limit, class_name, output_dir, three_step_mode }) => {
     return new Promise((resolve, reject) => {
@@ -72,7 +69,7 @@ function registerDownloadHandlers(ipcMain, mainWindow) {
       
       pythonProcess.stderr.on('data', (d) => {
         if (!downloadStopped) {
-          console.error(`Reddit Download Error: ${d}`);
+          logger.warn('Reddit download stderr', d.toString());
         }
       });
 
@@ -94,7 +91,12 @@ function registerDownloadHandlers(ipcMain, mainWindow) {
           }
           resolve({ success: true, message: output, downloaded: downloadedCount });
         } else {
-          reject(new Error(`Process exited with code ${code}`));
+          const errorMessage = output.includes('No images found') 
+            ? 'No images found in subreddit. Please check the subreddit name and try again.'
+            : output.includes('Network') || output.includes('connection')
+            ? 'Network error. Please check your internet connection and try again.'
+            : `Download failed with code ${code}. ${output.substring(output.length - 200)}`;
+          reject(new Error(errorMessage));
         }
       });
     });
@@ -102,9 +104,7 @@ function registerDownloadHandlers(ipcMain, mainWindow) {
 
   /**
    * Pauses the current Reddit image download process.
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether the pause operation succeeded.
-   * @returns {string} [returns.error] - Error message if pause failed.
+   * @returns {Promise<Object>} Result object with success status and optional error message.
    */
   ipcMain.handle('pause-download', async () => {
     if (currentDownloadProcess && !downloadStopped) {
@@ -119,9 +119,7 @@ function registerDownloadHandlers(ipcMain, mainWindow) {
 
   /**
    * Resumes a paused Reddit image download process.
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether the resume operation succeeded.
-   * @returns {string} [returns.error] - Error message if resume failed.
+   * @returns {Promise<Object>} Result object with success status and optional error message.
    */
   ipcMain.handle('resume-download', async () => {
     if (currentDownloadProcess && !downloadStopped && downloadPaused) {
@@ -136,9 +134,7 @@ function registerDownloadHandlers(ipcMain, mainWindow) {
 
   /**
    * Stops the current Reddit image download process.
-   * @returns {Promise<Object>} Result object with success status.
-   * @returns {boolean} returns.success - Whether the stop operation succeeded.
-   * @returns {string} [returns.error] - Error message if stop failed.
+   * @returns {Promise<Object>} Result object with success status and optional error message.
    */
   ipcMain.handle('stop-download', async () => {
     if (currentDownloadProcess) {

@@ -1,6 +1,7 @@
 const { dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
+const { logger } = require('../utils/logger');
 
 /**
  * Registers file operation IPC handlers.
@@ -89,11 +90,11 @@ function registerFileHandlers(ipcMain, mainWindow) {
    */
   ipcMain.handle('copy-folder', async (event, { source, destination }) => {
     try {
-      console.log('Copying folder from', source, 'to', destination);
+      logger.debug('Copying folder', { source, destination });
       
       const sourceExists = await fs.pathExists(source);
       if (!sourceExists) {
-        console.log('Source folder does not exist:', source);
+        logger.warn('Source folder does not exist', { source });
         return { success: false, error: 'Source folder does not exist' };
       }
       
@@ -106,10 +107,10 @@ function registerFileHandlers(ipcMain, mainWindow) {
       
       await fs.copy(source, destination, { overwrite: true });
       
-      console.log('Folder copied successfully');
+      logger.info('Folder copied successfully', { source, destination });
       return { success: true };
     } catch (error) {
-      console.error('Error copying folder:', error);
+      logger.error('Error copying folder', error);
       throw error;
     }
   });
@@ -124,19 +125,19 @@ function registerFileHandlers(ipcMain, mainWindow) {
    */
   ipcMain.handle('remove-folder', async (event, folderPath) => {
     try {
-      console.log('Removing folder:', folderPath);
+      logger.debug('Removing folder', { folderPath });
       
       const folderExists = await fs.pathExists(folderPath);
       if (folderExists) {
         await fs.remove(folderPath);
-        console.log('Folder removed successfully');
+        logger.info('Folder removed successfully', { folderPath });
         return { success: true };
       } else {
-        console.log('Folder does not exist:', folderPath);
+        logger.debug('Folder does not exist', { folderPath });
         return { success: false, error: 'Folder does not exist' };
       }
     } catch (error) {
-      console.error('Error removing folder:', error);
+      logger.error('Error removing folder', error);
       throw error;
     }
   });
@@ -155,7 +156,7 @@ function registerFileHandlers(ipcMain, mainWindow) {
       await shell.openPath(modelsHistoryPath);
       return { success: true };
     } catch (e) {
-      console.error('Error opening models folder:', e);
+      logger.error('Error opening models folder', e);
       return { success: false, error: e.message };
     }
   });

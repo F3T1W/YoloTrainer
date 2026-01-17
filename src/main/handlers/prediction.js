@@ -1,5 +1,6 @@
 const path = require('path');
 const { spawn } = require('child_process');
+const { logger } = require('../utils/logger');
 
 /**
  * Registers prediction-related IPC handlers.
@@ -14,14 +15,7 @@ function registerPredictionHandlers(ipcMain, mainWindow) {
    * @param {string} params.modelPath - Path to the model file (.pt).
    * @param {string} params.imagePath - Path to the image file.
    * @param {number} [params.conf] - Confidence threshold (0-1). Defaults to 0.25.
-   * @returns {Promise<Object>} Result object with detection results.
-   * @returns {boolean} returns.success - Whether prediction succeeded.
-   * @returns {string} returns.resultPath - Path to the annotated result image.
-   * @returns {string} returns.output - Raw output from prediction script.
-   * @returns {Array<Object>} returns.detections - Array of detected objects.
-   * @returns {string} returns.detections[].class_name - Detected class name.
-   * @returns {number} returns.detections[].confidence - Detection confidence (0-1).
-   * @returns {Array<number>} returns.detections[].bbox - Bounding box coordinates [x1, y1, x2, y2].
+   * @returns {Promise<Object>} Result object with success, resultPath, output, and detections array.
    */
   ipcMain.handle('predict-image', async (event, { modelPath, imagePath, conf }) => {
     return new Promise((resolve, reject) => {
@@ -57,13 +51,13 @@ function registerPredictionHandlers(ipcMain, mainWindow) {
           try {
             detections = JSON.parse(jsonStr);
           } catch (e) {
-            console.error('Failed to parse detection JSON:', e);
+            logger.error('Failed to parse detection JSON', e);
           }
         }
       });
       
       pythonProcess.stderr.on('data', (d) => {
-        console.error(`Prediction Info: ${d}`);
+        logger.debug('Prediction info', { data: d });
       });
 
       pythonProcess.on('close', (code) => {

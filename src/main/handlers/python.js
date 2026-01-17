@@ -35,7 +35,7 @@ function registerPythonHandlers(ipcMain, mainWindow) {
       
       return result;
     } catch (error) {
-      console.error('Error checking Python status:', error);
+      logger.error('Error checking Python status', error);
       throw error;
     }
   });
